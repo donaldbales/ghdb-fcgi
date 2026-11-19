@@ -1,0 +1,11 @@
+set -x
+sudo pwd
+#sudo cp ghdbform.html /var/www/html
+#sudo cp ghdblist.html /var/www/html
+gcc add.c    -o add.fcgi    -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 add.fcgi
+gcc delete.c -o delete.fcgi -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 delete.fcgi
+gcc edit.c   -o edit.fcgi   -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 edit.fcgi
+gcc find.c   -o find.fcgi   -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 find.fcgi
+gcc insert.c -o insert.fcgi -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 insert.fcgi
+gcc select.c -o select.fcgi -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 select.fcgi
+gcc update.c -o update.fcgi -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 update.fcgi

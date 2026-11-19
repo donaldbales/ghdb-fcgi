@@ -1,6 +1,7 @@
+#include "fcgi_stdio.h" /* fcgi library; put it first*/
+
 #include <ctype.h>
 #include <mysql.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -8,12 +9,12 @@
 #include "ghdb-cgi-bin.h"
 
 /*
-gcc delete.c -o delete.cgi -I/usr/include/mysql -lmysqlclient && chmod 755 delete.cgi && sudo cp delete.cgi /usr/lib/cgi-bin
+gcc delete.c -o delete.fcgi -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 delete.fcgi
 
-cat Apple.txt | env CONTENT_LENGTH=`stat -c %s Apple.txt` ./delete.cgi
+cat Apple.txt | env CONTENT_LENGTH=`stat -c %s Apple.txt` ./delete.fcgi
 */
 
-int main()
+int main(int argc, char const *argv[])
 {
 	int i;
 
@@ -39,6 +40,12 @@ int main()
 	long unsigned *bind_length;
 	bool *bind_is_null;
 
+	int n = 0;
+
+	debug = getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
+
+	if (debug > 1) dprintf(2, "%s: loaded.\n", argv[0]);
+
 	/*
 		Get a connection to MySQL
 	*/
@@ -48,16 +55,16 @@ int main()
 		exit(EXIT_FAILURE);
 	}
 
-	//fprintf(stderr, "Initialize a new INSERT prepared statement.\n");
+	if (debug > 0) fprintf(stderr, "Initialize a new INSERT prepared statement.\n");
 	stmt = mysql_stmt_init(mysql);
 	if (mysql_stmt_errno(stmt) != 0)
 	{
 		fprintf(stderr, "%s\n", mysql_stmt_error(stmt));
 		exit(EXIT_FAILURE);
 	}
-	//fprintf(stderr, "New prepared statement: %p\n", stmt);
+	if (debug > 0) fprintf(stderr, "New prepared statement: %p\n", stmt);
 
-	//fprintf(stderr, "Prepare the statement.\n");
+	if (debug > 0) fprintf(stderr, "Prepare the statement.\n");
 	i = mysql_stmt_prepare(stmt, ghdb_delete, strlen(ghdb_delete));
 	if (mysql_stmt_errno(stmt) != 0)
 	{
@@ -65,103 +72,115 @@ int main()
 		exit(EXIT_FAILURE);
 	}
 
+	if (debug > 1) dprintf(2, "%s: initialized.\n", argv[0]);
 
 	/*
-		Get the POST key value pairs
+		FCGI response loop.
 	*/
-	key_values = get_post_data(&key_values_length);
-	//fprintf(stderr, "key_values_length=%d\n", key_values_length);
+	n = FCGI_Accept();
+	if (debug > 0) fprintf(stderr, "FCGI_Accept=%d\n", n);
+	while (n >= 0)
+	{
+		/*
+			Get the POST key value pairs
+		*/
+		key_values = get_post_data(&key_values_length);
+		if (debug > 0) fprintf(stderr, "key_values_length=%d\n", key_values_length);
 
-	if (key_values_length > 0)
-	{		
-		values = (char **)malloc(sizeof(char *) * NUM_FIELDS);
-		for (i = 0; i < NUM_FIELDS; i++)
-		{
-			*(values + i) = (char *)malloc(sizeof(char) * 2);
-			strcpy(*(values + i), "");
-		}
-		values_length = 0;
-		for (i = 0; i < key_values_length; i++)
-		{
-			field_index = get_field_index((key_values + i)->key);
-			//fprintf(stderr, "field_index=%d\n", field_index);
-			//fprintf(stderr, "(key_values + i)->value=%s\n", (key_values + i)->value);
-			//fprintf(stderr, "url_decode((key_values + i)->value)=%s\n", url_decode((key_values + i)->value));
-			if (field_index > -1)
+		if (key_values_length > 0)
+		{		
+			values = (char **)malloc(sizeof(char *) * NUM_FIELDS);
+			for (i = 0; i < NUM_FIELDS; i++)
 			{
-				values_length++;
-				strcpy(*(values + field_index), url_decode((key_values + i)->value)); 
-				//fprintf(stderr, "*(values + %d)=\"%s\"\n", field_index, *(values + field_index));
-			} 
+				*(values + i) = (char *)malloc(sizeof(char) * 2);
+				strcpy(*(values + i), "");
+			}
+			values_length = 0;
+			for (i = 0; i < key_values_length; i++)
+			{
+				field_index = get_field_index((key_values + i)->key);
+				if (debug > 0) fprintf(stderr, "field_index=%d\n", field_index);
+				if (debug > 0) fprintf(stderr, "(key_values + i)->value=%s\n", (key_values + i)->value);
+				if (debug > 0) fprintf(stderr, "url_decode((key_values + i)->value)=%s\n", url_decode((key_values + i)->value));
+				if (field_index > -1)
+				{
+					values_length++;
+					strcpy(*(values + field_index), url_decode((key_values + i)->value)); 
+					if (debug > 0) fprintf(stderr, "*(values + %d)=\"%s\"\n", field_index, *(values + field_index));
+				} 
+			}
+		}	
+
+		if (debug > 0) fprintf(stderr, "Build the bind_param variable.\n");
+		bind_params = (struct MYSQL_BIND *)malloc(sizeof(struct MYSQL_BIND) * NUM_FIELDS);
+		if (bind_params == NULL)
+		{
+			fprintf(stderr, "Failed to allocate bind_params memory.\n");
+			exit(EXIT_FAILURE);
 		}
-	}	
+		if (debug > 0) fprintf(stderr, "Set the bind_param array to zeroes.\n");
+		memset(bind_params, 0, sizeof(struct MYSQL_BIND) * NUM_FIELDS);
+		if (debug > 0) fprintf(stderr, "bind_params=%p\n", bind_params);
 
-	//fprintf(stderr, "Build the bind_param variable.\n");
-	bind_params = (struct MYSQL_BIND *)malloc(sizeof(struct MYSQL_BIND) * NUM_FIELDS);
-	if (bind_params == NULL)
-	{
-		fprintf(stderr, "Failed to allocate bind_params memory.\n");
-		exit(EXIT_FAILURE);
-	}
-	//fprintf(stderr, "Set the bind_param array to zeroes.\n");
-	memset(bind_params, 0, sizeof(struct MYSQL_BIND) * NUM_FIELDS);
-	//fprintf(stderr, "bind_params=%p\n", bind_params);
+		// now set the where clause
+		bind_params_index = -1;
+		if (debug > 0) fprintf(stderr, "Initialize the bind_params structure for %s.\n", fields[0].n);
 
-	// now set the where clause
-	bind_params_index = -1;
-	//fprintf(stderr, "Initialize the bind_params structure for %s.\n", fields[0].n);
+		if (debug > 0) fprintf(stderr, "Allocate bind_param_buffer memory for %s.\n", *(values + 0));
+		bind_param_buffer = malloc(strlen(*(values + 0)) + 1);
+		strcpy(bind_param_buffer, *(values + 0));
 
-	//fprintf(stderr, "Allocate bind_param_buffer memory for %s.\n", *(values + 0));
-	bind_param_buffer = malloc(strlen(*(values + 0)) + 1);
-	strcpy(bind_param_buffer, *(values + 0));
+		if (debug > 0) fprintf(stderr, "Allocate bind_param_length memory for %ld.\n", strlen(*(values + 0)));
+		bind_param_length = malloc(sizeof(unsigned long int));
+		*(bind_param_length) = strlen(*(values + 0));
 
-	//fprintf(stderr, "Allocate bind_param_length memory for %ld.\n", strlen(*(values + 0)));
-	bind_param_length = malloc(sizeof(unsigned long int));
-	*(bind_param_length) = strlen(*(values + 0));
+		if (debug > 0) fprintf(stderr, "Allocate bind_param_is_null memory for %d.\n", (*(bind_param_length) == 0) ? 1 : 0);
+		bind_param_is_null = malloc(sizeof(int));
+		*(bind_param_is_null) = (*(bind_param_length) == 0) ? 1 : 0;
 
-	//fprintf(stderr, "Allocate bind_param_is_null memory for %d.\n", (*(bind_param_length) == 0) ? 1 : 0);
-	bind_param_is_null = malloc(sizeof(int));
-	*(bind_param_is_null) = (*(bind_param_length) == 0) ? 1 : 0;
+		bind_params_index++;
+		(bind_params + bind_params_index)->buffer_type = fields[0].mst;
+		(bind_params + bind_params_index)->buffer = bind_param_buffer;
+		(bind_params + bind_params_index)->length = bind_param_length;
+		(bind_params + bind_params_index)->is_null = bind_param_is_null;
 
-	bind_params_index++;
-	(bind_params + bind_params_index)->buffer_type = fields[0].mst;
-	(bind_params + bind_params_index)->buffer = bind_param_buffer;
-	(bind_params + bind_params_index)->length = bind_param_length;
-	(bind_params + bind_params_index)->is_null = bind_param_is_null;
+		if (debug > 0) fprintf(stderr, "Bind the parameters.\n");
+		mysql_stmt_bind_param(stmt, bind_params);
+		if (mysql_stmt_errno(stmt) != 0)
+		{
+			fprintf(stderr, "%s\n", mysql_stmt_error(stmt));
+			fflush(stderr);
+			sleep(1);
+			exit(EXIT_FAILURE);
+		}
 
-	//fprintf(stderr, "Bind the parameters.\n");
-	mysql_stmt_bind_param(stmt, bind_params);
-	if (mysql_stmt_errno(stmt) != 0)
-	{
-		fprintf(stderr, "%s\n", mysql_stmt_error(stmt));
-		fflush(stderr);
-		sleep(1);
-		exit(EXIT_FAILURE);
-	}
+		if (debug > 0) fprintf(stderr, "Execute the prepared statement.\n");
+		i = mysql_stmt_execute(stmt);
+		if (debug > 0) fprintf(stderr, "i=%d\n", i);
+		if (mysql_stmt_errno(stmt) != 0)
+		{
+			fprintf(stderr, "%s\n", mysql_stmt_error(stmt));
+			fflush(stderr);
+			sleep(1);
+			exit(EXIT_FAILURE);
+		}
 
-	//fprintf(stderr, "Execute the prepared statement.\n");
-	i = mysql_stmt_execute(stmt);
-	//fprintf(stderr, "i=%d\n", i);
-	if (mysql_stmt_errno(stmt) != 0)
-	{
-		fprintf(stderr, "%s\n", mysql_stmt_error(stmt));
-		fflush(stderr);
-		sleep(1);
-		exit(EXIT_FAILURE);
-	}
+		affected_rows = mysql_stmt_affected_rows(stmt);
+		if (debug > 0) fprintf(stderr, "%ld row deleted.\n", affected_rows);
 
-	affected_rows = mysql_stmt_affected_rows(stmt);
-	fprintf(stderr, "%ld row deleted.\n", affected_rows);
+		printf("Status: 303 See other\n");
+		printf("Location: /fcgi/select.fcgi\n\n");
+		fflush(stdout);
 
-	printf("Status: 303 See other\n");
-	printf("Location: /cgi-bin/select.cgi\n\n");
-	fflush(stdout);
+		n = FCGI_Accept();
+		if (debug > 0) fprintf(stderr, "FCGI_Accept=%d\n", n);
+	} // while
 
-
-	//fprintf(stderr, "Close the prepared statement.\n");
+	if (debug > 0) fprintf(stderr, "Close the prepared statement:%p\n", stmt);
 	mysql_stmt_close(stmt);
-	//fprintf(stderr, "Close the connection.\n");
+	if (debug > 0) fprintf(stderr, "Close the mysql connection:%p\n", mysql);
 	mysql_close(mysql);
+	fflush(stderr);
 
 	return 0;
 }

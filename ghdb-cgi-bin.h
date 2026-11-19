@@ -79,6 +79,8 @@
 
 #define NUM_FIELDS 37
 
+int debug = 0;
+
 struct FIELD
 {
 	char n[31];
@@ -307,7 +309,7 @@ char * html_encode(char *string)
 	for (i=0; i<string_length; i++)
 	{
 		c = *(string + i);
-		//printf("%c\n", c);
+		//if (debug > 1) dprintf(2, "%c\n", c);
 		switch (c)
 		{
 			case '<':
@@ -332,7 +334,7 @@ char * html_encode(char *string)
 	for (i=0; i<string_length; i++)
 	{
 		c = *(string + i);
-		//printf("%c\n", c);
+		//if (debug > 1) dprintf(2, "%c\n", c);
 		switch (c)
 		{
 			case '<':
@@ -387,34 +389,34 @@ char * strrep(char *string, const char *search, const char *replace)
 		printf("Failed to allocate %d bytes of memory for buffer.\n", string_length);
 	}
 	char *b = buffer;
-	//printf("string_length=%d\n", string_length);
-	//printf("result_length=%d\n", result_length);
-	//printf("string=\"%s\"\n", string);
-	//printf("search=\"%s\"\n", search);
-	//printf("replace=\"%s\"\n", replace);
+	//if (debug > 1) dprintf(2, "string_length=%d\n", string_length);
+	//if (debug > 1) dprintf(2, "result_length=%d\n", result_length);
+	//if (debug > 1) dprintf(2, "string=\"%s\"\n", string);
+	//if (debug > 1) dprintf(2, "search=\"%s\"\n", search);
+	//if (debug > 1) dprintf(2, "replace=\"%s\"\n", replace);
 
 	strcpy(buffer, string);
 	while ((p = strstr(buffer, search)) != NULL) {
-		//printf("offset1=%d\n", offset);
+		//if (debug > 1) dprintf(2, "offset1=%d\n", offset);
 		length = p - buffer;
-		//printf("length=%d\n", length);
+		//if (debug > 1) dprintf(2, "length=%d\n", length);
 		strncpy(result + offset, buffer, length);
 		*(result + offset + length) = '\0';
-		//printf("result1=\"%s\"\n", result);
+		//if (debug > 1) dprintf(2, "result1=\"%s\"\n", result);
 		offset += length;
-		//printf("offset2=%d\n", offset);
+		//if (debug > 1) dprintf(2, "offset2=%d\n", offset);
 		strcpy(result + offset, replace);
 		*(result + offset + result_length) = '\0';
-		//printf("result2=\"%s\"\n", result);
+		//if (debug > 1) dprintf(2, "result2=\"%s\"\n", result);
 		offset += replace_length;
-		//printf("offset3=%d\n", offset);
+		//if (debug > 1) dprintf(2, "offset3=%d\n", offset);
 		strcpy(buffer, p + search_length);
-		//printf("buffer=\"%s\"\n", buffer);
+		//if (debug > 1) dprintf(2, "buffer=\"%s\"\n", buffer);
 	}
 	strcpy(result + offset, buffer);
 	
 	free(b);
-	//printf("strlen(result)=%d\n", strlen(result));
+	//if (debug > 1) dprintf(2, "strlen(result)=%d\n", strlen(result));
 	return result;
 }
 
@@ -435,7 +437,7 @@ char * url_decode(char *string)
 	for (i=0; i<string_length; i++)
 	{
 		c = *(string + i);
-		//fprintf(stderr, "url_decode(): c=%c\n", c);
+		//if (debug > 1) dprintf(2, "url_decode(): c=%c\n", c);
 		switch (c)
 		{
 			case '%':
@@ -462,7 +464,7 @@ char * url_decode(char *string)
 	for (i=0; i<string_length; i++)
 	{
 		c = *(string + i);
-		//fprintf(stderr, "url_decode(): c=%c\n", c);
+		//if (debug > 1) dprintf(2, "url_decode(): c=%c\n", c);
 		switch (c)
 		{
 			case '%':
@@ -478,8 +480,9 @@ char * url_decode(char *string)
 						x2i[2] = '\0';
 						*p = (char) strtol(x2i, NULL, 16);
 						p += 1;
-						// only one because of the auto increment? i += 2;
-						i += 1;
+						// only one because of the auto increment? 
+						i += 2;
+						// no i += 1;
 					}
 				}
 				break;
@@ -515,20 +518,20 @@ char * get_asset(char *file_name)
 		file_buffer = malloc(file_status.st_size);
 		if (file_buffer == NULL) 
 		{
-			fprintf(stderr, "Failed to allocate %ld bytes of memory for file_buffer.\n", file_status.st_size);
+			dprintf(2, "Failed to allocate %ld bytes of memory for file_buffer.\n", file_status.st_size);
 			exit(EXIT_FAILURE);
 		}
-		//fprintf(strerr, "file_status.st_size=%lu\n", file_status.st_size);
+		//if (debug > 1) dprintf(2, "file_status.st_size=%lu\n", file_status.st_size);
 	}
 
 	file_pointer = fopen(file_name, "r");
 	if (file_pointer)
 	{
 		bytes_read = fread(file_buffer, 1, file_status.st_size, file_pointer);
-		//fprintf(stderr, "bytes_read=%lu\n", bytes_read);
+		//if (debug > 1) dprintf(2, "bytes_read=%lu\n", bytes_read);
 		if (bytes_read != file_status.st_size)
 		{
-			fprintf(stderr, "Didn't read the whole file.\n");
+			dprintf(2, "Didn't read the whole file.\n");
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -566,22 +569,22 @@ MYSQL * get_mysql_connection()
 	mysql_pwd = malloc(32 + 1);
 	mysql_db = malloc(64 + 1);
 
-	strcpy(mysql_user, getenv("MYSQL_USER") != NULL ? getenv("MYSQL_USER") : "User not key_values_length.");
-	strcpy(mysql_host, getenv("MYSQL_HOST") != NULL ? getenv("MYSQL_HOST") : "Host not key_values_length.");
-	strcpy(mysql_pwd, getenv("MYSQL_PWD") != NULL ? getenv("MYSQL_PWD") : "Password not key_values_length.");
-	strcpy(mysql_db, getenv("MYSQL_DB") != NULL ? getenv("MYSQL_DB") : "Database not key_values_length.");
+	strcpy(mysql_user, getenv("MYSQL_USER") != NULL ? getenv("MYSQL_USER") : "MYSQL_USER not found.");
+	strcpy(mysql_host, getenv("MYSQL_HOST") != NULL ? getenv("MYSQL_HOST") : "MYSQL_HOST not found.");
+	strcpy(mysql_pwd, getenv("MYSQL_PWD") != NULL ? getenv("MYSQL_PWD") : "MYSQL_PASSWD not found.");
+	strcpy(mysql_db, getenv("MYSQL_DB") != NULL ? getenv("MYSQL_DB") : "MYSQL_DB not found.");
 
-	fprintf(stderr, "mysql_user=\"%s\"\n", mysql_user);
-	fprintf(stderr, "mysql_host=\"%s\"\n", mysql_host);
-	fprintf(stderr, "mysql_db=\"%s\"\n", mysql_db);
+	if (debug > 1) dprintf(2, "mysql_user=\"%s\"\n", mysql_user);
+	if (debug > 1) dprintf(2, "mysql_host=\"%s\"\n", mysql_host);
+	if (debug > 1) dprintf(2, "mysql_db=\"%s\"\n", mysql_db);
 
 	mysql = mysql_init(NULL);
-	//fprintf(stderr, "mysql=%p\n", (void *)mysql);
+	//if (debug > 1) dprintf(2, "mysql=%p\n", (void *)mysql);
 
 	mysql_real_connect(mysql, mysql_host, mysql_user, mysql_pwd, mysql_db, 0, NULL, 0);
 	if (mysql_errno(mysql) != 0)
 	{
-		fprintf(stderr, "Failed to connect to database: Error: %s\n", mysql_error(mysql));
+		dprintf(2, "Failed to connect to database: Error: %s\n", mysql_error(mysql));
 		mysql = NULL;
 	}
 
@@ -606,31 +609,31 @@ struct KEY_VALUE * get_post_data(int *key_values_length)
 	struct KEY_VALUE *key_values = NULL;
 
 	content_length_string = getenv("CONTENT_LENGTH");
-	//fprintf(stderr, "get_post_data(): content_length_string=\"%s\"\n", content_length_string);
+	//dprintf(2, "get_post_data(): content_length_string=\"%s\"\n", content_length_string);
 	if (content_length_string != NULL)
 	{
 		content_length = atoi(content_length_string);
-		//fprintf(stderr, "get_post_data(): content_length=%d\n", content_length);
+		//dprintf(2, "get_post_data(): content_length=%d\n", content_length);
 		if (content_length > 0)
 		{	
 			buffer = malloc(content_length + 1);
 			if (buffer == NULL)
 			{
-				fprintf(stderr, "get_post_data(): Failed to allocate %d bytes for content buffer.\n", content_length + 1);
+				dprintf(2, "get_post_data(): Failed to allocate %d bytes for content buffer.\n", content_length + 1);
 			}
 
 			if (content_length > 0)
 			{
 				fgets(buffer, content_length + 1, stdin);
-				//fprintf(stderr, "get_post_data(): buffer=\"%s\"\n", buffer);
+				//dprintf(2, "get_post_data(): buffer=\"%s\"\n", buffer);
 			}
 
 			buffer_length = strlen(buffer);
 			if (buffer_length > 0)
 			{
-				//fprintf(stderr, "get_post_data(): buffer_length=%d\n", buffer_length);
+				//dprintf(2, "get_post_data(): buffer_length=%d\n", buffer_length);
 				for (i = 0, key_values_found = 1; i < buffer_length; i++, key_values_found += (((char)*(buffer + i)) == '&') ? 1 : 0);
-				//fprintf(stderr, "get_post_data(): key_values_found=%d\n", key_values_found);
+				//dprintf(2, "get_post_data(): key_values_found=%d\n", key_values_found);
 				if (key_values_found > 0)
 				{
 					key_values = malloc((sizeof(struct KEY_VALUE) * key_values_found));
@@ -638,14 +641,14 @@ struct KEY_VALUE * get_post_data(int *key_values_length)
 					key_values_index = -1;
 					while ((token = strsep(&buffer, "&\n"))) // the \n is a separator
 					{
-						//fprintf(stderr, "get_post_data(): token=\"%s\"\n", token);
+						//dprintf(2, "get_post_data(): token=\"%s\"\n", token);
 						if (strlen(token) > 0)
 						{
 							while ((key = strsep(&token, "=")))
 							{
-								//fprintf(stderr, "get_post_data(): key=\"%s\"\n", key);
+								//dprintf(2, "get_post_data(): key=\"%s\"\n", key);
 								value = strsep(&token, "=");
-								//fprintf(stderr, "get_post_data(): value=\"%s\"\n", value);
+								//dprintf(2, "get_post_data(): value=\"%s\"\n", value);
 								key_values_index++;
 								(key_values + key_values_index)->key = malloc(strlen(key) + 1);
 								strcpy((key_values + key_values_index)->key, key);
@@ -664,5 +667,7 @@ struct KEY_VALUE * get_post_data(int *key_values_length)
 
 	return key_values;
 }
+
+//int debug = getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
 
 #endif
