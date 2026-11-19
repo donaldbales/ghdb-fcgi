@@ -13,8 +13,10 @@
 /*
 gcc select.c -o select.fcgi -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 select.fcgi
 
-cat Apple.txt | env CONTENT_LENGTH=`stat -c %s Apple.txt` ./select.fcgi
+cat Apple.select | env CONTENT_LENGTH=`stat -c %s Apple.select` ./select.fcgi
+cat Empty.select | env CONTENT_LENGTH=`stat -c %s Empty.select` ./select.fcgi
 
+2026-11-19: Fixed. sudo pmap -x 269398 | grep -e Address -e total, no memory leaks.
 */
 
 int main(int argc, char const *argv[])
@@ -28,6 +30,7 @@ int main(int argc, char const *argv[])
 	int field_index = 0;
 	int values_index = 0;
 	int values_length = 0;
+	char *temp = NULL;
 
 	char *order = " order by 1";
 	char *sql = NULL;
@@ -37,17 +40,19 @@ int main(int argc, char const *argv[])
 
 	MYSQL *mysql = NULL;
 	MYSQL_STMT *stmt = NULL;
-	bool *bind_param_is_null;
-	char *bind_param_buffer;
+	
+	MYSQL_BIND *bind_params = NULL;
+	bool *bind_param_is_null = NULL;
+	char *bind_param_buffer = NULL;
+	long unsigned *bind_param_length = NULL;
 	int bind_params_index = 0;
-	long unsigned *bind_param_length;
-	MYSQL_BIND *bind_params;
+	int bind_params_length = 0;
 
-	MYSQL_BIND *bind_results;
-	bool *bind_result_errors;
-	bool *bind_result_is_nulls;
-	char **bind_result_buffers;
-	unsigned long *bind_result_lengths;
+	MYSQL_BIND *bind_results = NULL;
+	bool *bind_result_is_nulls = NULL;
+	char **bind_result_buffers = NULL;
+	unsigned long *bind_result_lengths = NULL;
+	bool *bind_result_errors = NULL;
 
 	char *row = NULL;
 	int row_length = 0;
@@ -61,37 +66,9 @@ int main(int argc, char const *argv[])
 
 	int n = 0;  //FCGI
 
-	debug = getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
+	debug = 2;  //getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
 
 	if (debug > 1) dprintf(2, "%s: loaded.\n", argv[0]);
-
-	/*
-		Initialize the results memory
-	*/
-	bind_result_errors = (bool *)malloc(sizeof(bool *) * NUM_FIELDS);
-	for (i = 0; i < NUM_FIELDS; i++)
-	{
-		*(bind_result_errors + i) = (bool) 0;
-	}
-
-	bind_result_is_nulls = (bool *)malloc(sizeof(bool *) * NUM_FIELDS);
-	for (i = 0; i < NUM_FIELDS; i++)
-	{
-		*(bind_result_is_nulls + i) = (bool) 0;
-	}
-
-	bind_result_buffers = (char **)malloc(sizeof(char *) * NUM_FIELDS);
-	for (i = 0; i < NUM_FIELDS; i++)
-	{
-		*(bind_result_buffers + i) = (char *)malloc(sizeof(char) * 2001);
-		strcpy(*(bind_result_buffers + i), "");
-	}
-
-	bind_result_lengths = (unsigned long *)malloc(sizeof(unsigned long *) * NUM_FIELDS);
-	for (i = 0; i < NUM_FIELDS; i++)
-	{
-		*(bind_result_lengths + i) = (unsigned long) 0;
-	}
 
 	/*
 		Get the HTML template
@@ -120,17 +97,28 @@ int main(int argc, char const *argv[])
 		/*
 			Get the POST key value pairs
 		*/
+		key_values_length = 0;
+		values_length = 0;
 		key_values = get_post_data(&key_values_length);
 		if (debug > 0) fprintf(stderr, "key_values_length=%d\n", key_values_length);
 		if (key_values_length > 0)
 		{		
 			values = (char **)malloc(sizeof(char *) * NUM_FIELDS);
+			if (values == NULL)
+			{
+				fprintf(stderr, "Failed to allocate values memory.\n");
+				exit(EXIT_FAILURE);
+			}
 			for (i = 0; i < NUM_FIELDS; i++)
 			{
-				*(values + i) = (char *)malloc(sizeof(char) * 1);
+				*(values + i) = (char *)malloc(sizeof(char) * 2001);
+				if (*(values + i) == NULL)
+				{
+					fprintf(stderr, "Failed to allocate value memory.\n");
+					exit(EXIT_FAILURE);
+				}
 				strcpy(*(values + i), "");
 			}
-			values_length = 0;
 			for (i = 0; i < key_values_length; i++)
 			{
 				field_index = get_field_index((key_values + i)->key);
@@ -138,10 +126,21 @@ int main(int argc, char const *argv[])
 				if (field_index > -1)
 				{
 					values_length++;
-					strcpy(*(values + field_index), url_decode((key_values + i)->value)); 
+					temp = url_decode((key_values + i)->value);
+					strcpy(*(values + field_index), temp);
+					free(temp); 
 					if (debug > 0) fprintf(stderr, "*(values + %d)=\"%s\"\n", field_index, *(values + field_index));
 				} 
 			}
+		}
+		if (key_values != NULL)
+		{
+			for (i = 0; i < values_length; i++)
+			{
+				free((key_values + i)->key);
+				free((key_values + i)->value);
+			}
+			free(key_values);
 		}
 
 		/*
@@ -157,6 +156,7 @@ int main(int argc, char const *argv[])
 		if (debug > 0) fprintf(stderr, "New prepared statement: %p\n", stmt);
 
 		if (debug > 0) fprintf(stderr, "Calculate the where clause length.\n");
+		where_length = 0;
 		if (values != NULL)
 		{
 			for (i = 0; i < NUM_FIELDS; i++)
@@ -189,8 +189,15 @@ int main(int argc, char const *argv[])
 			}
 		}
 		if (debug > 0) fprintf(stderr, "Where clause length=%d\n", where_length);
+		
 		sql = malloc(strlen(ghdb_select) + where_length + order_length + 6); // includes room for 1 = 1
+		if (sql == NULL)
+		{
+			fprintf(stderr, "Failed to allocate sql memory.\n");
+			exit(EXIT_FAILURE);
+		}
 		strcpy(sql, ghdb_select);
+		
 		if (where_length > 0)
 		{
 			values_index = -1;
@@ -256,11 +263,12 @@ int main(int argc, char const *argv[])
 			bind_params = (struct MYSQL_BIND *)malloc(sizeof(struct MYSQL_BIND) * values_length);
 			if (bind_params == NULL)
 			{
-				if (debug > 0) fprintf(stderr, "Failed to allocate bind_params memory.\n");
+				fprintf(stderr, "Failed to allocate bind_params memory.\n");
 			}
 			memset(bind_params, 0, sizeof(struct MYSQL_BIND) * values_length);
 			if (debug > 0) fprintf(stderr, "bind_params=%p\n", bind_params);
 			bind_params_index = -1;
+			bind_params_length = 0;
 			for (i = 0; i < NUM_FIELDS; i++)
 			{
 				if (strlen(*(values + i)) > 0)
@@ -269,17 +277,33 @@ int main(int argc, char const *argv[])
 
 					if (debug > 0) fprintf(stderr, "Allocate bind_param_buffer memory for %s.\n", *(values + i));
 					bind_param_buffer = malloc(strlen(*(values + i)) + 1);
+					if (bind_param_buffer == NULL)
+					{
+						fprintf(stderr, "Failed to allocate bind_param_buffer memory.\n");
+						exit(EXIT_FAILURE);
+					}
 					strcpy(bind_param_buffer, *(values + i));
 
 					if (debug > 0) fprintf(stderr, "Allocate bind_param_length memory for %ld.\n", strlen(*(values + i)));
 					bind_param_length = malloc(sizeof(unsigned long int));
+					if (bind_param_length == NULL)
+					{
+						fprintf(stderr, "Failed to allocate bind_param_length memory.\n");
+						exit(EXIT_FAILURE);
+					}
 					*(bind_param_length) = strlen(*(values + i));
 
 					if (debug > 0) fprintf(stderr, "Allocate bind_param_is_null memory for %d.\n", (*(bind_param_length) == 0) ? 1 : 0);
 					bind_param_is_null = malloc(sizeof(int));
+					if (bind_param_is_null == NULL)
+					{
+						fprintf(stderr, "Failed to allocate bind_param_is_null memory.\n");
+						exit(EXIT_FAILURE);
+					}
 					*(bind_param_is_null) = (*(bind_param_length) == 0) ? 1 : 0;
 
 					bind_params_index++;
+					bind_params_length++;
 					(bind_params + bind_params_index)->buffer_type = fields[i].mst;
 					if (debug > 0) fprintf(stderr, "buffer_type set.\n");
 					(bind_params + bind_params_index)->buffer = bind_param_buffer;
@@ -306,6 +330,61 @@ int main(int argc, char const *argv[])
 			exit(EXIT_FAILURE);
 		}
 
+		/*
+			Initialize the results memory
+		*/
+		if (debug > 0) fprintf(stderr, "Initialize the bind result arrays.\n");
+		bind_result_errors = (bool *)malloc(sizeof(bool *) * NUM_FIELDS);
+		if (bind_result_errors == NULL)
+		{
+			fprintf(stderr, "Failed to allocate bind_result_errors memory.\n");
+			exit(EXIT_FAILURE);
+		}
+		for (i = 0; i < NUM_FIELDS; i++)
+		{
+			*(bind_result_errors + i) = (bool) 0;
+		}
+
+		bind_result_is_nulls = (bool *)malloc(sizeof(bool *) * NUM_FIELDS);
+		if (bind_result_is_nulls == NULL)
+		{
+			fprintf(stderr, "Failed to allocate bind_result_is_nulls memory.\n");
+			exit(EXIT_FAILURE);
+		}
+		for (i = 0; i < NUM_FIELDS; i++)
+		{
+			*(bind_result_is_nulls + i) = (bool) 0;
+		}
+
+		bind_result_buffers = (char **)malloc(sizeof(char *) * NUM_FIELDS);
+		if (bind_result_buffers == NULL)
+		{
+			fprintf(stderr, "Failed to allocate bind_result_buffers memory.\n");
+			exit(EXIT_FAILURE);
+		}
+		for (i = 0; i < NUM_FIELDS; i++)
+		{
+			*(bind_result_buffers + i) = (char *)malloc(sizeof(char) * 2001);
+			if (*(bind_result_buffers + i) == NULL)
+			{
+				fprintf(stderr, "Failed to allocate bind_result_buffer memory.\n");
+				exit(EXIT_FAILURE);
+			}
+			strcpy(*(bind_result_buffers + i), "");
+		}
+
+		bind_result_lengths = (unsigned long *)malloc(sizeof(unsigned long *) * NUM_FIELDS);
+		if (bind_result_lengths == NULL)
+		{
+			fprintf(stderr, "Failed to allocate bind_result_lengths memory.\n");
+			exit(EXIT_FAILURE);
+		}
+		for (i = 0; i < NUM_FIELDS; i++)
+		{
+			*(bind_result_lengths + i) = (unsigned long) 0;
+		}
+
+		if (debug > 0) fprintf(stderr, "Initialize the bind results.\n");
 		bind_results = (struct MYSQL_BIND *)malloc(sizeof(struct MYSQL_BIND) * NUM_FIELDS);
 		if (bind_results == NULL)
 		{
@@ -341,7 +420,13 @@ int main(int argc, char const *argv[])
 
 		if (debug > 0) fprintf(stderr, "Note: MYSQL_NO_DATA=%d\n", MYSQL_NO_DATA);
 		row = (char *)malloc(sizeof(char) * 700);
+		if (row == NULL)
+		{
+			fprintf(stderr, "Failed to allocate row memory.\n");
+			exit(EXIT_FAILURE);
+		}
 		strcpy(row, "\n");
+		alt = 0;
 		for (;;)
 		{
 			if (debug > 0) fprintf(stderr, "\nFetch results\n");
@@ -362,13 +447,18 @@ int main(int argc, char const *argv[])
 
 			if (row == NULL)
 			{
-				row_length += 600;
+				row_length += 700;
 			}
 			else
 			{
 				row_length = strlen(row) + 700;
 			}
 			row = (char *)realloc(row, sizeof(char) * row_length);
+			if (row == NULL)
+			{
+				fprintf(stderr, "Failed to reallocate row memory.\n");
+				exit(EXIT_FAILURE);
+			}
 			strcat(row, "\t\t\t<tr");
 			if (alt % 2 == 0)
 			{
@@ -391,7 +481,6 @@ int main(int argc, char const *argv[])
 			strcat(row, "\">");
 			strcat(row, "<input type=\"submit\" value=\"&nbsp;Edit&nbsp;&nbsp;\"></form>");
 			strcat(row, "</td></tr>\n");
-			//printf("%s", row);
 			
 			if (debug > 0) fprintf(stderr, "strlen(row)=%ld\n", strlen(row));
 			/*
@@ -410,11 +499,9 @@ int main(int argc, char const *argv[])
 			alt++;
 		}
 
-		//printf("%s", row);
 		if (debug > 0) fprintf(stderr, "strlen(row)=%ld\n", strlen(row));
 
 		// Now send the form.
-
 		temp_buffer = malloc(strlen(file_buffer) + 1);
 		if (temp_buffer == NULL) 
 		{
@@ -425,6 +512,7 @@ int main(int argc, char const *argv[])
 
 		pointer = strrep(temp_buffer, "<!--LIST-->", row);
 		free(temp_buffer);
+		free(row);
 		temp_buffer = pointer;
 
 		pointer = strrep(temp_buffer, "<!--MSG-->", "&nbsp;");
@@ -441,15 +529,59 @@ int main(int argc, char const *argv[])
 
 		printf("Content-Type:text/html;charset=iso-8859-1\n\n");
 		puts(temp_buffer);
-		free(temp_buffer);
 		fflush(stdout);
+		free(temp_buffer);
+
+		if (debug > 0) fprintf(stderr, "Close the prepared statement:%p\n", stmt);
+		mysql_stmt_close(stmt);
+
+		if (debug > 0) fprintf(stderr, "Done.\n");
+		fflush(stderr);
+		fsync(2);
+
+		/*
+			Clean up dynamically allocated memory
+		*/
+		if (bind_results != NULL)
+		{
+			for (i = NUM_FIELDS - 1; i > -1; i--)
+			{
+				//dprintf(2, "*(bind_result_buffers + %d)=%p\n", i, *(bind_result_buffers + i));
+				free(*(bind_result_buffers + i));
+			}
+			free(bind_result_errors);
+			free(bind_result_is_nulls);
+			free(bind_result_buffers);
+			free(bind_result_lengths);
+			free(bind_results);
+		}
+
+		if (bind_params != NULL)
+		{
+			for (i = 0; i < bind_params_length; i++)
+			{
+				free((bind_params + i)->buffer);
+				free((bind_params + i)->length);
+				free((bind_params + i)->is_null);
+			}
+			free(bind_params);
+		}
+		
+		free(sql);
+
+		if (values != NULL)
+		{
+			for (i = 0; i < NUM_FIELDS; i++)
+			{
+				free(*(values + i));
+			}
+			free(values);
+		}
 
 		n = FCGI_Accept();
 		if (debug > 0) fprintf(stderr, "FCGI_Accept=%d\n", n);
 	} // while
 
-	if (debug > 0) fprintf(stderr, "Close the prepared statement:%p\n", stmt);
-	mysql_stmt_close(stmt);
 	if (debug > 0) fprintf(stderr, "Close the mysql connection:%p\n", mysql);
 	mysql_close(mysql);
 	fflush(stderr);

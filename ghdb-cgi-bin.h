@@ -330,6 +330,11 @@ char * html_encode(char *string)
 		}
 	}
 	result = malloc(result_length + 1);
+	if (result == NULL)
+	{
+		dprintf(2, "Failed to allocate %d bytes of memory for result.\n", result_length + 1);
+		exit(EXIT_FAILURE);
+	}
 	p = result;
 	for (i=0; i<string_length; i++)
 	{
@@ -377,24 +382,20 @@ char * strrep(char *string, const char *search, const char *replace)
 	char *p;
 	int occurs = 0;
 	for (p = string; (p = strstr(p, search)) != NULL; p += search_length, occurs++);
-	int result_length = string_length - (search_length * occurs) + (replace_length * occurs) + 1;
-	char *result = malloc(result_length);
+	int result_length = string_length - (search_length * occurs) + (replace_length * occurs);
+	char *result = malloc(result_length + 1);
 	if (result == NULL) 
 	{
-		printf("Failed to allocate %d bytes of memory for result.\n", result_length);
+		dprintf(2, "Failed to allocate %d bytes of memory for result.\n", result_length);
+		exit(EXIT_FAILURE);
 	}
 	char *buffer = malloc(string_length + 1);
 	if (buffer == NULL) 
 	{
-		printf("Failed to allocate %d bytes of memory for buffer.\n", string_length);
+		dprintf(2, "Failed to allocate %d bytes of memory for buffer.\n", string_length);
+		exit(EXIT_FAILURE);
 	}
 	char *b = buffer;
-	//if (debug > 1) dprintf(2, "string_length=%d\n", string_length);
-	//if (debug > 1) dprintf(2, "result_length=%d\n", result_length);
-	//if (debug > 1) dprintf(2, "string=\"%s\"\n", string);
-	//if (debug > 1) dprintf(2, "search=\"%s\"\n", search);
-	//if (debug > 1) dprintf(2, "replace=\"%s\"\n", replace);
-
 	strcpy(buffer, string);
 	while ((p = strstr(buffer, search)) != NULL) {
 		//if (debug > 1) dprintf(2, "offset1=%d\n", offset);
@@ -460,6 +461,11 @@ char * url_decode(char *string)
 		Copy and translate to the result
 	*/
 	result = malloc(result_length + 1);
+	if (result == NULL)
+	{
+		dprintf(2, "Failed to allocate %d bytes of memory for result.\n", result_length + 1);
+		exit(EXIT_FAILURE);
+	}
 	p = result;
 	for (i=0; i<string_length; i++)
 	{
@@ -515,10 +521,10 @@ char * get_asset(char *file_name)
 	i = stat(file_name, &file_status);
 	if (i == 0) 
 	{
-		file_buffer = malloc(file_status.st_size);
+		file_buffer = malloc(file_status.st_size + 1);
 		if (file_buffer == NULL) 
 		{
-			dprintf(2, "Failed to allocate %ld bytes of memory for file_buffer.\n", file_status.st_size);
+			dprintf(2, "Failed to allocate %ld bytes of memory for file_buffer.\n", file_status.st_size + 1);
 			exit(EXIT_FAILURE);
 		}
 		//if (debug > 1) dprintf(2, "file_status.st_size=%lu\n", file_status.st_size);
@@ -565,14 +571,34 @@ MYSQL * get_mysql_connection()
 
 	// allocate for max sizes
 	mysql_user = malloc(32 + 1);
+	if (mysql_user == NULL)
+	{
+		dprintf(2, "Failed to allocate %d bytes of memory for mysql_user.\n", 32 + 1);
+		exit(EXIT_FAILURE);
+	}
 	mysql_host = malloc(255 + 1);
+	if (mysql_host == NULL)
+	{
+		dprintf(2, "Failed to allocate %d bytes of memory for mysql_host.\n", 255 + 1);
+		exit(EXIT_FAILURE);
+	}
 	mysql_pwd = malloc(32 + 1);
+	if (mysql_pwd == NULL)
+	{
+		dprintf(2, "Failed to allocate %d bytes of memory for mysql_pwd.\n", 32 + 1);
+		exit(EXIT_FAILURE);
+	}
 	mysql_db = malloc(64 + 1);
+	if (mysql_db == NULL)
+	{
+		dprintf(2, "Failed to allocate %d bytes of memory for mysql_db.\n", 64 + 1);
+		exit(EXIT_FAILURE);
+	}
 
 	strcpy(mysql_user, getenv("MYSQL_USER") != NULL ? getenv("MYSQL_USER") : "MYSQL_USER not found.");
 	strcpy(mysql_host, getenv("MYSQL_HOST") != NULL ? getenv("MYSQL_HOST") : "MYSQL_HOST not found.");
-	strcpy(mysql_pwd, getenv("MYSQL_PWD") != NULL ? getenv("MYSQL_PWD") : "MYSQL_PASSWD not found.");
-	strcpy(mysql_db, getenv("MYSQL_DB") != NULL ? getenv("MYSQL_DB") : "MYSQL_DB not found.");
+	strcpy(mysql_pwd,  getenv("MYSQL_PWD")  != NULL ? getenv("MYSQL_PWD")  : "MYSQL_PASSWD not found.");
+	strcpy(mysql_db,   getenv("MYSQL_DB")   != NULL ? getenv("MYSQL_DB")   : "MYSQL_DB not found.");
 
 	if (debug > 1) dprintf(2, "mysql_user=\"%s\"\n", mysql_user);
 	if (debug > 1) dprintf(2, "mysql_host=\"%s\"\n", mysql_host);
@@ -620,6 +646,7 @@ struct KEY_VALUE * get_post_data(int *key_values_length)
 			if (buffer == NULL)
 			{
 				dprintf(2, "get_post_data(): Failed to allocate %d bytes for content buffer.\n", content_length + 1);
+				exit(EXIT_FAILURE);
 			}
 
 			if (content_length > 0)
@@ -636,7 +663,12 @@ struct KEY_VALUE * get_post_data(int *key_values_length)
 				//dprintf(2, "get_post_data(): key_values_found=%d\n", key_values_found);
 				if (key_values_found > 0)
 				{
-					key_values = malloc((sizeof(struct KEY_VALUE) * key_values_found));
+					key_values = (struct KEY_VALUE *)malloc((sizeof(struct KEY_VALUE) * key_values_found));
+					if (key_values == NULL)
+					{
+						dprintf(2, "Failed to allocate %ld bytes of memory for key_values.\n", (sizeof(struct KEY_VALUE) * key_values_found));
+						exit(EXIT_FAILURE);
+					}
 					memset(key_values, 0, sizeof(struct KEY_VALUE) * key_values_found);
 					key_values_index = -1;
 					while ((token = strsep(&buffer, "&\n"))) // the \n is a separator
@@ -651,8 +683,18 @@ struct KEY_VALUE * get_post_data(int *key_values_length)
 								//dprintf(2, "get_post_data(): value=\"%s\"\n", value);
 								key_values_index++;
 								(key_values + key_values_index)->key = malloc(strlen(key) + 1);
+								if ((key_values + key_values_index)->key == NULL)
+								{
+									dprintf(2, "Failed to allocate %ld bytes of memory for key.\n", strlen(key) + 1);
+									exit(EXIT_FAILURE);
+								}
 								strcpy((key_values + key_values_index)->key, key);
 								(key_values + key_values_index)->value = malloc(strlen(value) + 1);
+								if ((key_values + key_values_index)->value == NULL)
+								{
+									dprintf(2, "Failed to allocate %ld bytes of memory for value.\n", strlen(value) + 1);
+									exit(EXIT_FAILURE);
+								}
 								strcpy((key_values + key_values_index)->value, value);
 							}
 						}
@@ -667,7 +709,5 @@ struct KEY_VALUE * get_post_data(int *key_values_length)
 
 	return key_values;
 }
-
-//int debug = getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
 
 #endif

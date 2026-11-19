@@ -13,6 +13,7 @@
 /*
 gcc find.c -o find.fcgi -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 find.fcgi 
 
+2026-11-19: sudo pmap -x 268238 | grep -e Address -e total, no memory leaks.
 */
 
 int main(int argc, char const *argv[])
@@ -26,7 +27,7 @@ int main(int argc, char const *argv[])
 
 	int n = 0;
 
-	debug = getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
+	debug = 2; //getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
 
 	if (debug > 1) dprintf(2, "%s: loaded.\n", argv[0]);
 
@@ -47,7 +48,7 @@ int main(int argc, char const *argv[])
 		temp_buffer = malloc(strlen(file_buffer) + 1);
 		if (temp_buffer == NULL) 
 		{
-			printf("Failed to allocate %ld bytes of memory for temp_buffer.\n", strlen(file_buffer) + 1);
+			fprintf(stderr, "Failed to allocate %ld bytes of memory for temp_buffer.\n", strlen(file_buffer) + 1);
 			exit(EXIT_FAILURE);
 		}
 		strcpy(temp_buffer, file_buffer);

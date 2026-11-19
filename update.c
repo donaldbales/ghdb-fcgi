@@ -12,7 +12,9 @@
 /*
 gcc update.c -o update.fcgi -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 update.fcgi
 
-cat Apple.txt | env CONTENT_LENGTH=`stat -c %s Apple.txt` ./update.fcgi
+cat Apple.update | env CONTENT_LENGTH=`stat -c %s Apple.update` ./update.fcgi
+
+2026-11-19: Fixed. sudo pmap -x 269941 | grep -e Address -e total, no memory leaks.
 
 */
 
@@ -27,14 +29,17 @@ int main(int argc, char const *argv[])
 	int field_index;
 	int values_index = 0;
 	int values_length = 0;
+	char *temp;
 
 	MYSQL *mysql = NULL;
 	MYSQL_STMT *stmt = NULL;
+
+	MYSQL_BIND *bind_params;
 	bool *bind_param_is_null;
 	char *bind_param_buffer;
-	int bind_params_index = 0;
 	long unsigned *bind_param_length;
-	MYSQL_BIND *bind_params;
+	int bind_params_index = 0;
+	int bind_params_length = 0;
 
 	uint64_t affected_rows;
 
@@ -44,7 +49,7 @@ int main(int argc, char const *argv[])
 
 	int n = 0;
 
-	debug = getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
+	debug = 2; //getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
 
 	if (debug > 1) dprintf(2, "%s: loaded.\n", argv[0]);
 
@@ -54,7 +59,7 @@ int main(int argc, char const *argv[])
 	mysql = get_mysql_connection();
 	if (mysql == NULL)
 	{
-		// TODO send a 500?
+		dprintf(2, "%s: Unable to connect to mysql.\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -87,17 +92,28 @@ int main(int argc, char const *argv[])
 		/*
 			Get the POST key value pairs
 		*/
+		key_values_length = 0;
+		values_length = 0;
 		key_values = get_post_data(&key_values_length);
 		if (debug > 0) fprintf(stderr, "key_values_length=%d\n", key_values_length);
 		if (key_values_length > 0)
 		{		
 			values = (char **)malloc(sizeof(char *) * NUM_FIELDS);
+			if (values == NULL)
+			{
+				fprintf(stderr, "Failed to allocate values memory.\n");
+				exit(EXIT_FAILURE);
+			}
 			for (i = 0; i < NUM_FIELDS; i++)
 			{
-				*(values + i) = (char *)malloc(sizeof(char) * 1);
+				*(values + i) = (char *)malloc(sizeof(char) * 2001);
+				if (*(values + i) == NULL)
+				{
+					fprintf(stderr, "Failed to allocate value memory.\n");
+					exit(EXIT_FAILURE);
+				}
 				strcpy(*(values + i), "");
 			}
-			values_length = 0;
 			for (i = 0; i < key_values_length; i++)
 			{
 				field_index = get_field_index((key_values + i)->key);
@@ -105,12 +121,26 @@ int main(int argc, char const *argv[])
 				if (field_index > -1)
 				{
 					values_length++;
-					strcpy(*(values + field_index), url_decode((key_values + i)->value)); 
+					temp = url_decode((key_values + i)->value);
+					strcpy(*(values + field_index), temp);
+					free(temp); 
 					if (debug > 0) fprintf(stderr, "*(values + %d)=\"%s\"\n", field_index, *(values + field_index));
 				} 
 			}
-		}	
+		}
+		if (key_values != NULL)
+		{
+			for (i = 0; i < values_length; i++)
+			{
+				free((key_values + i)->key);
+				free((key_values + i)->value);
+			}
+			free(key_values);
+		}
 
+		/*
+			Set the column parameters
+		*/
 		if (debug > 0) fprintf(stderr, "Build the bind_param variable.\n");
 		bind_params = (struct MYSQL_BIND *)malloc(sizeof(struct MYSQL_BIND) * NUM_FIELDS);
 		if (bind_params == NULL)
@@ -121,45 +151,81 @@ int main(int argc, char const *argv[])
 		if (debug > 0) fprintf(stderr, "Set the bind_param array to zeroes.\n");
 		memset(bind_params, 0, sizeof(struct MYSQL_BIND) * NUM_FIELDS);
 		if (debug > 0) fprintf(stderr, "bind_params=%p\n", bind_params);
+
 		bind_params_index = -1;
+		bind_params_length = 0;
 		for (i = 1; i < NUM_FIELDS; i++) // start at 1 to skip plant_name, the primary key
 		{
 			if (debug > 0) fprintf(stderr, "Initialize the bind_params structure for %s.\n", fields[i].n);
 
 			if (debug > 0) fprintf(stderr, "Allocate bind_param_buffer memory for \"%s\".\n", *(values + i));
 			bind_param_buffer = malloc(strlen(*(values + i)) + 1);
+			if (bind_param_buffer == NULL)
+			{
+				fprintf(stderr, "Failed to allocate bind_param_buffer memory.\n");
+				exit(EXIT_FAILURE);
+			}
 			strcpy(bind_param_buffer, strlen(*(values + i)) == 0 ? "" : *(values + i));
 
 			if (debug > 0) fprintf(stderr, "Allocate bind_param_length memory for %ld.\n", strlen(*(values + i)));
 			bind_param_length = malloc(sizeof(unsigned long int));
+			if (bind_param_length == NULL)
+			{
+				fprintf(stderr, "Failed to allocate bind_param_length memory.\n");
+				exit(EXIT_FAILURE);
+			}
 			*(bind_param_length) = strlen(*(values + i));
 
 			if (debug > 0) fprintf(stderr, "Allocate bind_param_is_null memory for %d.\n", (*(bind_param_length) == 0) ? 1 : 0);
 			bind_param_is_null = malloc(sizeof(bool));
+			if (bind_param_is_null == NULL)
+			{
+				fprintf(stderr, "Failed to allocate bind_param_is_null memory.\n");
+				exit(EXIT_FAILURE);
+			}
 			*(bind_param_is_null) = (*(bind_param_length) == 0) ? (bool) 1 : (bool) 0;
 
 			bind_params_index++;
+			bind_params_length++;
 			(bind_params + bind_params_index)->buffer_type = fields[i].mst;
 			(bind_params + bind_params_index)->buffer = bind_param_buffer;
 			(bind_params + bind_params_index)->length = bind_param_length;
 			(bind_params + bind_params_index)->is_null = bind_param_is_null;
 		}
-		// now set the where clause
+		/*
+			Now set the where clause
+		*/
 		if (debug > 0) fprintf(stderr, "Initialize the bind_params structure for %s.\n", fields[0].n);
 
 		if (debug > 0) fprintf(stderr, "Allocate bind_param_buffer memory for %s.\n", *(values + 0));
 		bind_param_buffer = malloc(strlen(*(values + 0)) + 1);
+		if (bind_param_buffer == NULL)
+		{
+			fprintf(stderr, "Failed to allocate bind_param_buffer memory.\n");
+			exit(EXIT_FAILURE);
+		}
 		strcpy(bind_param_buffer, *(values + 0));
 
 		if (debug > 0) fprintf(stderr, "Allocate bind_param_length memory for %ld.\n", strlen(*(values + 0)));
 		bind_param_length = malloc(sizeof(unsigned long int));
+		if (bind_param_length == NULL)
+		{
+			fprintf(stderr, "Failed to allocate bind_param_length memory.\n");
+			exit(EXIT_FAILURE);
+		}
 		*(bind_param_length) = strlen(*(values + 0));
 
 		if (debug > 0) fprintf(stderr, "Allocate bind_param_is_null memory for %d.\n", (*(bind_param_length) == 0) ? 1 : 0);
 		bind_param_is_null = malloc(sizeof(int));
+		if (bind_param_is_null == NULL)
+		{
+			fprintf(stderr, "Failed to allocate bind_param_is_null memory.\n");
+			exit(EXIT_FAILURE);
+		}
 		*(bind_param_is_null) = (*(bind_param_length) == 0) ? 1 : 0;
 
 		bind_params_index++;
+		bind_params_length++;
 		(bind_params + bind_params_index)->buffer_type = fields[0].mst;
 		(bind_params + bind_params_index)->buffer = bind_param_buffer;
 		(bind_params + bind_params_index)->length = bind_param_length;
@@ -196,6 +262,30 @@ int main(int argc, char const *argv[])
 		printf("Status: 303 See other\n");
 		printf("Location: /fcgi/select.fcgi\n\n");
 		fflush(stdout);
+
+		if (debug > 0) fprintf(stderr, "Done.\n");
+		fflush(stderr);
+		fsync(2);
+
+		if (bind_params != NULL)
+		{
+			for (i = 0; i < bind_params_length; i++)
+			{
+				free((bind_params + i)->buffer);
+				free((bind_params + i)->length);
+				free((bind_params + i)->is_null);
+			}
+			free(bind_params);
+		}
+		
+		if (values != NULL)
+		{
+			for (i = 0; i < NUM_FIELDS; i++)
+			{
+				free(*(values + i));
+			}
+			free(values);
+		}
 
 		n = FCGI_Accept();
 		if (debug > 0) fprintf(stderr, "FCGI_Accept=%d\n", n);

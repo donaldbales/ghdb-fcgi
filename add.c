@@ -1,18 +1,20 @@
 #include "fcgi_stdio.h" /* fcgi library; put it first*/
 
 #include <ctype.h>
+#include <fcntl.h>
 #include <stdlib.h>
 
 #include <string.h>
-#include <sys/types.h>
 #include <sys/stat.h>
-#include <fcntl.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include "mysql.h"
 #include "ghdb-cgi-bin.h"
 
 /*
 gcc add.c -o add.fcgi -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 add.fcgi
 
+2026-11-18: sudo pmap -x 261560 | grep -e Address -e total, verified no memory leakage.
 */
 
 int main(int argc, char const *argv[])
@@ -26,16 +28,16 @@ int main(int argc, char const *argv[])
 
 	int n = 0;
 
-	debug = getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
+	debug = 2; //getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
 
-	if (debug > 1) dprintf(2, "%s: loaded.\n", argv[0]);
+	if (debug > 1) dprintf(2, "%s: loaded. PID=%d\n", argv[0], getpid());
 
 	/*
 		Get the HTML template
 	*/
 	file_buffer = get_asset(file_name);
 
-	if (debug > 1) dprintf(2, "%s: initialized.\n", argv[0]);
+	if (debug > 1) dprintf(2, "%s: initialized. PID=%d\n", argv[0], getpid());
 
 	/*
 		FCGI response loop.
@@ -69,9 +71,7 @@ int main(int argc, char const *argv[])
 		temp_buffer = pointer;
 
 		printf("Content-Type:text/html;charset=iso-8859-1\n\n");
-
 		puts(temp_buffer);
-
 		free(temp_buffer);
 
 		n = FCGI_Accept();
