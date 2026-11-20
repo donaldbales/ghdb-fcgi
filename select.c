@@ -2,13 +2,13 @@
 
 #include <ctype.h>
 #include <fcntl.h>
-#include <mysql.h>
-
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
+#include "mysql.h"
 #include "ghdb-cgi-bin.h"
 /*
 gcc select.c -o select.fcgi -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 select.fcgi

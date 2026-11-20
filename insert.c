@@ -1,13 +1,15 @@
 #include "fcgi_stdio.h" /* fcgi library; put it first*/
 
 #include <ctype.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
-#include "ghdb-cgi-bin.h"
 #include "mysql.h"
+#include "ghdb-cgi-bin.h"
 
 /*
 gcc insert.c -o insert.fcgi -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 insert.fcgi
@@ -35,7 +37,7 @@ int main(int argc, char const *argv[])
 	MYSQL *mysql = NULL;
 	MYSQL_STMT *stmt = NULL;
 
-	MYSQL_BIND bind_params[NUM_FIELDS] = NULL;
+	MYSQL_BIND bind_params[NUM_FIELDS];
 	bool *bind_param_is_null = NULL;
 	char *bind_param_buffer = NULL;
 	long unsigned *bind_param_length = NULL;

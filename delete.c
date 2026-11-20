@@ -1,13 +1,15 @@
 #include "fcgi_stdio.h" /* fcgi library; put it first*/
 
 #include <ctype.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
-#include "ghdb-cgi-bin.h"
 #include "mysql.h"
+#include "ghdb-cgi-bin.h"
 
 /*
 gcc delete.c -o delete.fcgi -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 delete.fcgi
@@ -25,7 +27,7 @@ int main(int argc, char const *argv[])
 	struct KEY_VALUE *key_values = NULL;
 
 	char **values = NULL;
-	int field_index = NULL;
+	int field_index = 0;
 	int values_index = 0;
 	int values_length = 0;
 	char *temp = NULL;
