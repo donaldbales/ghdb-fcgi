@@ -1,13 +1,13 @@
 #include "fcgi_stdio.h" /* fcgi library; put it first*/
 
 #include <ctype.h>
-#include <mysql.h>
-
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
 #include "ghdb-cgi-bin.h"
+#include "mysql.h"
 
 /*
 gcc insert.c -o insert.fcgi -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 insert.fcgi
@@ -19,13 +19,13 @@ cat Apple.txt | env CONTENT_LENGTH=`stat -c %s Apple.txt` ./insert.fcgi
 
 int main(int argc, char const *argv[])
 {
-	int i;
+	int i = 0;
 
 	int key_values_length = 0;
-	struct KEY_VALUE *key_values;
+	struct KEY_VALUE *key_values = NULL;
 
-	char **values;
-	int field_index;
+	char **values = NULL;
+	int field_index = 0;
 	int values_index = 0;
 	int values_length = 0;
 	char *temp = NULL;
@@ -34,11 +34,13 @@ int main(int argc, char const *argv[])
 
 	MYSQL *mysql = NULL;
 	MYSQL_STMT *stmt = NULL;
-	MYSQL_BIND bind[NUM_FIELDS];
-	char *bind_buffer;
-	long unsigned *bind_length;
-	bool *bind_is_null;
-	uint64_t affected_rows;
+
+	MYSQL_BIND bind_params[NUM_FIELDS] = NULL;
+	bool *bind_param_is_null = NULL;
+	char *bind_param_buffer = NULL;
+	long unsigned *bind_param_length = NULL;
+
+	uint64_t affected_rows = 0;
 
 	int n = 0;
 
@@ -55,20 +57,20 @@ int main(int argc, char const *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	if (debug > 0) fprintf(stderr, "Initialize a new INSERT prepared statement.\n");
+	if (debug > 0) dprintf(2, "Initialize a new INSERT prepared statement.\n");
 	stmt = mysql_stmt_init(mysql);
 	if (mysql_stmt_errno(stmt) != 0)
 	{
-		fprintf(stderr, "%s\n", mysql_stmt_error(stmt));
+		dprintf(2, "%s\n", mysql_stmt_error(stmt));
 		exit(EXIT_FAILURE);
 	}
-	if (debug > 0) fprintf(stderr, "New prepared statement: %p\n", stmt);
+	if (debug > 0) dprintf(2, "New prepared statement: %p\n", stmt);
 
-	if (debug > 0) fprintf(stderr, "Prepare the statement.\n");
+	if (debug > 0) dprintf(2, "Prepare the statement.\n");
 	i = mysql_stmt_prepare(stmt, ghdb_insert, strlen(ghdb_insert));
 	if (mysql_stmt_errno(stmt) != 0)
 	{
-		fprintf(stderr, "%s\n", mysql_stmt_error(stmt));
+		dprintf(2, "%s\n", mysql_stmt_error(stmt));
 		exit(EXIT_FAILURE);
 	}
 
@@ -89,7 +91,7 @@ int main(int argc, char const *argv[])
 		key_values = get_post_data(&key_values_length);
 		if (debug > 0) fprintf(stderr, "key_values_length=%d\n", key_values_length);
 		if (key_values_length > 0)
-		{		
+		{
 			values = (char **)malloc(sizeof(char *) * NUM_FIELDS);
 			if (values == NULL)
 			{
@@ -111,7 +113,7 @@ int main(int argc, char const *argv[])
 				field_index = get_field_index((key_values + i)->key);
 				if (debug > 0) fprintf(stderr, "field_index=%d\n", field_index);
 				if (debug > 0) fprintf(stderr, "(key_values + i)->value=%s\n", (key_values + i)->value);
-				if (debug > 0) 
+				if (debug > 0)
 				{
 					temp = url_decode((key_values + i)->value);
 					fprintf(stderr, "url_decode((key_values + i)->value)=%s\n", temp);
@@ -139,39 +141,39 @@ int main(int argc, char const *argv[])
 		for (i = 0; i < NUM_FIELDS; i++)
 		{
 			if (debug > 0) fprintf(stderr, "Initialize the bind structure for %s.\n", fields[i].n);
-			bind_buffer = malloc(strlen(*(values + i)) + 1);
-			if (bind_buffer == NULL)
+			bind_param_buffer = malloc(strlen(*(values + i)) + 1);
+			if (bind_param_buffer == NULL)
 			{
-				fprintf(stderr, "Failed to allocate bind_buffer memory.\n");
+				fprintf(stderr, "Failed to allocate bind_param_buffer memory.\n");
 				exit(EXIT_FAILURE);
 			}
-			strcpy(bind_buffer, *(values + i));
+			strcpy(bind_param_buffer, *(values + i));
 
-			bind_length = malloc(sizeof(unsigned long int));
-			if (bind_length == NULL)
+			bind_param_length = malloc(sizeof(unsigned long int));
+			if (bind_param_length == NULL)
 			{
-				fprintf(stderr, "Failed to allocate bind_length memory.\n");
+				fprintf(stderr, "Failed to allocate bind_param_length memory.\n");
 				exit(EXIT_FAILURE);
 			}
-			*(bind_length) = strlen(*(values + i));
-			lengths[i] = *(bind_length);
+			*(bind_param_length) = strlen(*(values + i));
+			lengths[i] = *(bind_param_length);
 
-			bind_is_null = malloc(sizeof(int));
-			if (bind_is_null == NULL)
+			bind_param_is_null = malloc(sizeof(int));
+			if (bind_param_is_null == NULL)
 			{
-				fprintf(stderr, "Failed to allocate bind_is_null memory.\n");
+				fprintf(stderr, "Failed to allocate bind_param_is_null memory.\n");
 				exit(EXIT_FAILURE);
 			}
-			*(bind_is_null) = (*(bind_length) == 0) ? 1 : 0;
+			*(bind_param_is_null) = (*(bind_param_length) == 0) ? 1 : 0;
 
-			bind[i].buffer_type = fields[i].mst;
-			bind[i].buffer = bind_buffer;
-			bind[i].length = bind_length;
-			bind[i].is_null = bind_is_null;
+			bind_params[i].buffer_type = fields[i].mst;
+			bind_params[i].buffer = bind_param_buffer;
+			bind_params[i].length = bind_param_length;
+			bind_params[i].is_null = bind_param_is_null;
 		}
 
 		if (debug > 0) fprintf(stderr, "Bind the parameters.\n");
-		mysql_stmt_bind_param(stmt, bind);
+		mysql_stmt_bind_param(stmt, bind_params);
 		if (mysql_stmt_errno(stmt) != 0)
 		{
 			fprintf(stderr, "%s\n", mysql_stmt_error(stmt));
@@ -195,19 +197,23 @@ int main(int argc, char const *argv[])
 		fflush(stdout);
 
 		/*
-			Clean up the bind buffer memory
+			Clean up dynamically allocated memory
 		*/
 		for (i = 0; i < NUM_FIELDS; i++)
 		{
-			free(bind[i].buffer);
-			free(bind[i].length);
-			free(bind[i].is_null);
+			free(bind_params[i].buffer);
+			free(bind_params[i].length);
+			free(bind_params[i].is_null);
 		}
-		for (i = 0; i < NUM_FIELDS; i++)
+
+		if (values != NULL)
 		{
-			free(*(values + i));
+			for (i = 0; i < NUM_FIELDS; i++)
+			{
+				free(*(values + i));
+			}
+			free(values);
 		}
-		free(values);
 
 		n = FCGI_Accept();
 		if (debug > 0) fprintf(stderr, "FCGI_Accept=%d\n", n);

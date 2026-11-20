@@ -1,12 +1,13 @@
 #include "fcgi_stdio.h" /* fcgi library; put it first*/
 
 #include <ctype.h>
-#include <stdlib.h>
-
-#include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 #include "mysql.h"
 #include "ghdb-cgi-bin.h"
 
@@ -20,7 +21,7 @@ int main(int argc, char const *argv[])
 {
 	int i = 0;
 
-	char *file_buffer= NULL;
+	char *file_buffer = NULL;
 	char *file_name = "/var/www/html/ghdbform.html";
 	char *pointer = NULL;
 	char *temp_buffer = NULL;
@@ -29,14 +30,14 @@ int main(int argc, char const *argv[])
 
 	debug = 2; //getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
 
-	if (debug > 1) dprintf(2, "%s: loaded.\n", argv[0]);
+	if (debug > 1) dprintf(2, "%s: loaded. PID=%d\n", argv[0], getpid());
 
 	/*
 		Get the HTML template
 	*/
 	file_buffer = get_asset(file_name);
 
-	if (debug > 1) dprintf(2, "%s: initialized.\n", argv[0]);
+	if (debug > 1) dprintf(2, "%s: initialized. PID=%d\n", argv[0], getpid());
 
 	/*
 		FCGI response loop.
@@ -53,7 +54,6 @@ int main(int argc, char const *argv[])
 		}
 		strcpy(temp_buffer, file_buffer);
 
-		//puts(temp_buffer);
 		for (i=0; i<NUM_FIELDS; i++)
 		{
 			pointer = strrep(temp_buffer, fields[i].cb, "");

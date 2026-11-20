@@ -23,10 +23,10 @@ int main(int argc, char const *argv[])
 	int i = 0;
 
 	int key_values_length = 0;
-	struct KEY_VALUE *key_values;
+	struct KEY_VALUE *key_values = NULL;
 
-	char **values;
-	int field_index;
+	char **values = NULL;
+	int field_index = 0;
 	int values_index = 0;
 	int values_length = 0;
 	char *temp = NULL;
@@ -39,20 +39,21 @@ int main(int argc, char const *argv[])
 
 	MYSQL *mysql = NULL;
 	MYSQL_STMT *stmt = NULL;
-	bool *bind_param_is_null;
-	char *bind_param_buffer;
-	long unsigned *bind_param_length;
+
+	MYSQL_BIND *bind_params = NULL;
+	bool *bind_param_is_null = NULL;
+	char *bind_param_buffer = NULL;
+	long unsigned *bind_param_length = NULL;
 	int bind_params_index = 0;
 	int bind_params_length = 0;
-	MYSQL_BIND *bind_params;
 
-	bool *bind_result_errors;
-	bool *bind_result_is_nulls;
-	char **bind_result_buffers;
-	unsigned long *bind_result_lengths;
-	MYSQL_BIND *bind_results;
+	MYSQL_BIND *bind_results = NULL;
+	bool *bind_result_is_nulls = NULL;
+	char **bind_result_buffers = NULL;
+	unsigned long *bind_result_lengths = NULL;
+	bool *bind_result_errors = NULL;
 
-	char *file_buffer= NULL;
+	char *file_buffer = NULL;
 	char *file_name = "/var/www/html/ghdbform.html";
 	char *pointer = NULL;
 	char *temp_buffer = NULL;
@@ -128,12 +129,15 @@ int main(int argc, char const *argv[])
 				} 
 			}
 		}
-		for (i = 0; i < values_length; i++)
+		if (key_values != NULL)
 		{
-			free((key_values + i)->key);
-			free((key_values + i)->value);
+			for (i = 0; i < values_length; i++)
+			{
+				free((key_values + i)->key);
+				free((key_values + i)->value);
+			}
+			free(key_values);
 		}
-		free(key_values);
 
 		/*
 			Create a prepared SELECT statement
@@ -149,35 +153,39 @@ int main(int argc, char const *argv[])
 
 		if (debug > 0) fprintf(stderr, "Calculate the where clause length.\n");
 		where_length = 0;
-		for (i = 0; i < NUM_FIELDS; i++)
+		if (values != NULL)
 		{
-			if (strlen(*(values + i)) > 0)
+			for (i = 0; i < NUM_FIELDS; i++)
 			{
-				if (strstr(*(values + i), "%") == NULL)
+				if (strlen(*(values + i)) > 0)
 				{
-					// it's an equal statement
-					// the column name: strlen(fields[i].n)
-					// space between the operator: 1
-					// equal operator: 1
-					// space between the parameter: 1
-					// the parameter place holder, ?: 1
-					// where_length > 0 means there's an " and ": 5
-					where_length += (where_length == 0 ? 0 : 5) + strlen(fields[i].n) + 4;
-				}
-				else
-				{
-					// it's a like statement
-					// the column name: strlen(fields[i].n)
-					// space between the operator: 1
-					// like operator: 4
-					// space between the parameter: 1
-					// the parameter place holder, ?: 1
-					// where_length > 0 means there's an " and ": 5
-					where_length += (where_length == 0 ? 0 : 5) + strlen(fields[i].n) + 7;
+					if (strstr(*(values + i), "%") == NULL)
+					{
+						// it's an equal statement
+						// the column name: strlen(fields[i].n)
+						// space between the operator: 1
+						// equal operator: 1
+						// space between the parameter: 1
+						// the parameter place holder, ?: 1
+						// where_length > 0 means there's an " and ": 5
+						where_length += (where_length == 0 ? 0 : 5) + strlen(fields[i].n) + 4;
+					}
+					else
+					{
+						// it's a like statement
+						// the column name: strlen(fields[i].n)
+						// space between the operator: 1
+						// like operator: 4
+						// space between the parameter: 1
+						// the parameter place holder, ?: 1
+						// where_length > 0 means there's an " and ": 5
+						where_length += (where_length == 0 ? 0 : 5) + strlen(fields[i].n) + 7;
+					}
 				}
 			}
 		}
 		if (debug > 0) fprintf(stderr, "Where clause length=%d\n", where_length);
+
 		sql = malloc(strlen(ghdb_select) + where_length + order_length + 6); // includes room for 1 = 1
 		if (sql == NULL)
 		{
@@ -185,6 +193,7 @@ int main(int argc, char const *argv[])
 			exit(EXIT_FAILURE);
 		}
 		strcpy(sql, ghdb_select);
+
 		if (where_length > 0)
 		{
 			values_index = -1;
@@ -242,6 +251,7 @@ int main(int argc, char const *argv[])
 		if (mysql_stmt_errno(stmt) != 0)
 		{
 			fprintf(stderr, "%s\n", mysql_stmt_error(stmt));
+			exit(EXIT_FAILURE);
 		}
 
 		if (where_length > 0)
@@ -419,7 +429,7 @@ int main(int argc, char const *argv[])
 			if (debug > 0) fprintf(stderr, "MYSQL_NO_DATA, i=%d\n", i);
 		}
 
-		//printf("%s", row);
+		// Now send the form
 		temp_buffer = malloc(strlen(file_buffer) + 1);
 		if (temp_buffer == NULL) 
 		{
@@ -472,40 +482,49 @@ int main(int argc, char const *argv[])
 		/*
 			Clean up dynamically allocated memory
 		*/
-		for (i = NUM_FIELDS - 1; i > -1; i--)
+		if (bind_results != NULL)
 		{
-			//dprintf(2, "*(bind_result_buffers + %d)=%p\n", i, *(bind_result_buffers + i));
-			free(*(bind_result_buffers + i));
+			for (i = NUM_FIELDS - 1; i > -1; i--)
+			{
+				//dprintf(2, "*(bind_result_buffers + %d)=%p\n", i, *(bind_result_buffers + i));
+				free(*(bind_result_buffers + i));
+			}
+			free(bind_result_errors);
+			free(bind_result_is_nulls);
+			free(bind_result_buffers);
+			free(bind_result_lengths);
+			free(bind_results);
 		}
-		free(bind_result_errors);
-		free(bind_result_is_nulls);
-		free(bind_result_buffers);
-		free(bind_result_lengths);
-		free(bind_results);
 
-		for (i = 0; i < bind_params_length; i++)
+		if (bind_params != NULL)
 		{
-			free((bind_params + i)->buffer);
-			free((bind_params + i)->length);
-			free((bind_params + i)->is_null);
+			for (i = 0; i < bind_params_length; i++)
+			{
+				free((bind_params + i)->buffer);
+				free((bind_params + i)->length);
+				free((bind_params + i)->is_null);
+			}
+			free(bind_params);
 		}
-		free(bind_params);
 
 		free(sql);
 
-		for (i = 0; i < NUM_FIELDS; i++)
+		if (values != NULL)
 		{
-			free(*(values + i));
+			for (i = 0; i < NUM_FIELDS; i++)
+			{
+				free(*(values + i));
+			}
+			free(values);
 		}
-		free(values);
 
 		n = FCGI_Accept();
 		if (debug > 0) fprintf(stderr, "FCGI_Accept=%d\n", n);
-	}
+	} // while
 
 	if (debug > 0) fprintf(stderr, "Close the mysql connection:%p\n", mysql);
 	mysql_close(mysql);
 	fflush(stderr);
-	
+
 	return 0;
 }

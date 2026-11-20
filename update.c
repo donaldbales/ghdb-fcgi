@@ -1,13 +1,13 @@
 #include "fcgi_stdio.h" /* fcgi library; put it first*/
 
 #include <ctype.h>
-#include <mysql.h>
-
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
 #include "ghdb-cgi-bin.h"
+#include "mysql.h"
 
 /*
 gcc update.c -o update.fcgi -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 update.fcgi
@@ -15,37 +15,36 @@ gcc update.c -o update.fcgi -I /usr/include -l:libfcgi.so -I /usr/include/mysql 
 cat Apple.update | env CONTENT_LENGTH=`stat -c %s Apple.update` ./update.fcgi
 
 2026-11-19: Fixed. sudo pmap -x 269941 | grep -e Address -e total, no memory leaks.
-
 */
 
 int main(int argc, char const *argv[])
 {
-	int i;
+	int i = 0;
 
 	int key_values_length = 0;
-	struct KEY_VALUE *key_values;
+	struct KEY_VALUE *key_values = NULL;
 
-	char **values;
-	int field_index;
+	char **values = NULL;
+	int field_index = NULL;
 	int values_index = 0;
 	int values_length = 0;
-	char *temp;
+	char *temp = NULL;
 
 	MYSQL *mysql = NULL;
 	MYSQL_STMT *stmt = NULL;
 
-	MYSQL_BIND *bind_params;
-	bool *bind_param_is_null;
-	char *bind_param_buffer;
-	long unsigned *bind_param_length;
+	MYSQL_BIND *bind_params = NULL;
+	bool *bind_param_is_null = NULL;
+	char *bind_param_buffer = NULL;
+	long unsigned *bind_param_length = NULL;
 	int bind_params_index = 0;
 	int bind_params_length = 0;
 
-	uint64_t affected_rows;
+	uint64_t affected_rows = 0;
 
-	char *bind_buffer;
-	long unsigned *bind_length;
-	bool *bind_is_null;
+	//char *bind_buffer = NULL;
+	//long unsigned *bind_length = NULL;
+	//bool *bind_is_null = NULL;
 
 	int n = 0;
 
@@ -59,24 +58,24 @@ int main(int argc, char const *argv[])
 	mysql = get_mysql_connection();
 	if (mysql == NULL)
 	{
-		dprintf(2, "%s: Unable to connect to mysql.\n", argv[0]);
+		dprintf(2, "%s: Failed to acquire a MySQL connection.\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 
-	if (debug > 0) fprintf(stderr, "Initialize a new INSERT prepared statement.\n");
+	if (debug > 0) dprintf(2, "Initialize a new INSERT prepared statement.\n");
 	stmt = mysql_stmt_init(mysql);
 	if (mysql_stmt_errno(stmt) != 0)
 	{
-		fprintf(stderr, "%s\n", mysql_stmt_error(stmt));
+		dprintf(2, "%s\n", mysql_stmt_error(stmt));
 		exit(EXIT_FAILURE);
 	}
-	if (debug > 0) fprintf(stderr, "New prepared statement: %p\n", stmt);
+	if (debug > 0) dprintf(2, "New prepared statement: %p\n", stmt);
 
-	if (debug > 0) fprintf(stderr, "Prepare the statement.\n");
+	if (debug > 0) dprintf(2, "Prepare the statement.\n");
 	i = mysql_stmt_prepare(stmt, ghdb_update, strlen(ghdb_update));
 	if (mysql_stmt_errno(stmt) != 0)
 	{
-		fprintf(stderr, "%s\n", mysql_stmt_error(stmt));
+		dprintf(2, "%s\n", mysql_stmt_error(stmt));
 		exit(EXIT_FAILURE);
 	}
 
@@ -97,7 +96,7 @@ int main(int argc, char const *argv[])
 		key_values = get_post_data(&key_values_length);
 		if (debug > 0) fprintf(stderr, "key_values_length=%d\n", key_values_length);
 		if (key_values_length > 0)
-		{		
+		{
 			values = (char **)malloc(sizeof(char *) * NUM_FIELDS);
 			if (values == NULL)
 			{
@@ -118,12 +117,19 @@ int main(int argc, char const *argv[])
 			{
 				field_index = get_field_index((key_values + i)->key);
 				if (debug > 0) fprintf(stderr, "field_index=%d\n", field_index);
+				if (debug > 0) fprintf(stderr, "(key_values + i)->value=%s\n", (key_values + i)->value);
+				if (debug > 0)
+				{
+					temp = url_decode((key_values + i)->value);
+					fprintf(stderr, "url_decode((key_values + i)->value)=%s\n", temp);
+					free(temp);
+				}
 				if (field_index > -1)
 				{
 					values_length++;
 					temp = url_decode((key_values + i)->value);
 					strcpy(*(values + field_index), temp);
-					free(temp); 
+					free(temp);
 					if (debug > 0) fprintf(stderr, "*(values + %d)=\"%s\"\n", field_index, *(values + field_index));
 				} 
 			}
@@ -138,9 +144,6 @@ int main(int argc, char const *argv[])
 			free(key_values);
 		}
 
-		/*
-			Set the column parameters
-		*/
 		if (debug > 0) fprintf(stderr, "Build the bind_param variable.\n");
 		bind_params = (struct MYSQL_BIND *)malloc(sizeof(struct MYSQL_BIND) * NUM_FIELDS);
 		if (bind_params == NULL)
@@ -154,6 +157,9 @@ int main(int argc, char const *argv[])
 
 		bind_params_index = -1;
 		bind_params_length = 0;
+		/*
+			Set the column parameters
+		*/
 		for (i = 1; i < NUM_FIELDS; i++) // start at 1 to skip plant_name, the primary key
 		{
 			if (debug > 0) fprintf(stderr, "Initialize the bind_params structure for %s.\n", fields[i].n);
@@ -192,6 +198,7 @@ int main(int argc, char const *argv[])
 			(bind_params + bind_params_index)->length = bind_param_length;
 			(bind_params + bind_params_index)->is_null = bind_param_is_null;
 		}
+
 		/*
 			Now set the where clause
 		*/
@@ -216,13 +223,13 @@ int main(int argc, char const *argv[])
 		*(bind_param_length) = strlen(*(values + 0));
 
 		if (debug > 0) fprintf(stderr, "Allocate bind_param_is_null memory for %d.\n", (*(bind_param_length) == 0) ? 1 : 0);
-		bind_param_is_null = malloc(sizeof(int));
+		bind_param_is_null = malloc(sizeof(bool));
 		if (bind_param_is_null == NULL)
 		{
 			fprintf(stderr, "Failed to allocate bind_param_is_null memory.\n");
 			exit(EXIT_FAILURE);
 		}
-		*(bind_param_is_null) = (*(bind_param_length) == 0) ? 1 : 0;
+		*(bind_param_is_null) = (*(bind_param_length) == 0) ? (bool)1 : (bool)0;
 
 		bind_params_index++;
 		bind_params_length++;
@@ -230,14 +237,6 @@ int main(int argc, char const *argv[])
 		(bind_params + bind_params_index)->buffer = bind_param_buffer;
 		(bind_params + bind_params_index)->length = bind_param_length;
 		(bind_params + bind_params_index)->is_null = bind_param_is_null;
-
-		if (debug > 0) fprintf(stderr, "Bind the parameters.\n");
-		mysql_stmt_bind_param(stmt, bind_params);
-		if (mysql_stmt_errno(stmt) != 0)
-		{
-			fprintf(stderr, "%s\n", mysql_stmt_error(stmt));
-			exit(EXIT_FAILURE);
-		}
 
 		if (debug > 0) fprintf(stderr, "Bind the parameters.\n");
 		mysql_stmt_bind_param(stmt, bind_params);
@@ -267,6 +266,9 @@ int main(int argc, char const *argv[])
 		fflush(stderr);
 		fsync(2);
 
+		/*
+			Clean up dynamically allocated memory
+		*/
 		if (bind_params != NULL)
 		{
 			for (i = 0; i < bind_params_length; i++)
@@ -277,7 +279,7 @@ int main(int argc, char const *argv[])
 			}
 			free(bind_params);
 		}
-		
+
 		if (values != NULL)
 		{
 			for (i = 0; i < NUM_FIELDS; i++)

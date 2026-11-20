@@ -40,7 +40,7 @@ int main(int argc, char const *argv[])
 
 	MYSQL *mysql = NULL;
 	MYSQL_STMT *stmt = NULL;
-	
+
 	MYSQL_BIND *bind_params = NULL;
 	bool *bind_param_is_null = NULL;
 	char *bind_param_buffer = NULL;
@@ -64,9 +64,9 @@ int main(int argc, char const *argv[])
 
 	int alt = 0;
 
-	int n = 0;  //FCGI
+	int n = 0;
 
-	debug = 2;  //getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
+	debug = 2; //getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
 
 	if (debug > 1) dprintf(2, "%s: loaded.\n", argv[0]);
 
@@ -74,14 +74,14 @@ int main(int argc, char const *argv[])
 		Get the HTML template
 	*/
 	file_buffer = get_asset(file_name);
-	
+
 	/*
 		Get a connection to MySQL
 	*/
 	mysql = get_mysql_connection();
 	if (mysql == NULL)
 	{
-		dprintf(2, "%s: Unable to connect to mysql.\n", argv[0]);
+		dprintf(2, "%s: Failed to acquire a MySQL connection.\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -189,7 +189,7 @@ int main(int argc, char const *argv[])
 			}
 		}
 		if (debug > 0) fprintf(stderr, "Where clause length=%d\n", where_length);
-		
+
 		sql = malloc(strlen(ghdb_select) + where_length + order_length + 6); // includes room for 1 = 1
 		if (sql == NULL)
 		{
@@ -197,7 +197,7 @@ int main(int argc, char const *argv[])
 			exit(EXIT_FAILURE);
 		}
 		strcpy(sql, ghdb_select);
-		
+
 		if (where_length > 0)
 		{
 			values_index = -1;
@@ -247,7 +247,7 @@ int main(int argc, char const *argv[])
 			strcat(sql, "1 = 1");
 		}
 		strcat(sql, order);
-		dprintf(2, "sql=\"%s\"\n", sql);
+		if (debug > 0) dprintf(2, "sql=\"%s\"\n", sql);
 
 		if (debug > 0) fprintf(stderr, "Prepare the statement.\n");
 
@@ -399,7 +399,7 @@ int main(int argc, char const *argv[])
 			if (debug > 0) fprintf(stderr, "Initialize the bind_results structure for %s.\n", fields[i].n);
 			(bind_results + i)->buffer_type = fields[i].mst;
 			(bind_results + i)->buffer = *(bind_result_buffers + i); 
-			(bind_results + i)->buffer_length = 2001; 
+			(bind_results + i)->buffer_length = 2000; 
 			(bind_results + i)->length = (bind_result_lengths + i);
 			(bind_results + i)->is_null = (bind_result_is_nulls + i);
 			(bind_results + i)->error = (bind_result_errors + i);
@@ -418,7 +418,6 @@ int main(int argc, char const *argv[])
 			if (debug > 0) fprintf(stderr, "Successfully bound the bind_results parameters\n");
 		}
 
-		if (debug > 0) fprintf(stderr, "Note: MYSQL_NO_DATA=%d\n", MYSQL_NO_DATA);
 		row = (char *)malloc(sizeof(char) * 700);
 		if (row == NULL)
 		{
@@ -481,24 +480,9 @@ int main(int argc, char const *argv[])
 			strcat(row, "\">");
 			strcat(row, "<input type=\"submit\" value=\"&nbsp;Edit&nbsp;&nbsp;\"></form>");
 			strcat(row, "</td></tr>\n");
-			
 			if (debug > 0) fprintf(stderr, "strlen(row)=%ld\n", strlen(row));
-			/*
-			for (i = 0; i < NUM_FIELDS; i++)
-			{
-				if (bind_result_is_nulls[i])
-				{
-					if (debug > 0) fprintf(stderr, "%s is NULL\n", fields[i].n);
-				}
-				else
-				{
-					if (debug > 0) fprintf(stderr, "%s = \"%s\"\n", fields[i].n, bind_result_buffers[i]);
-				}
-			}
-			*/
 			alt++;
 		}
-
 		if (debug > 0) fprintf(stderr, "strlen(row)=%ld\n", strlen(row));
 
 		// Now send the form.
@@ -566,7 +550,7 @@ int main(int argc, char const *argv[])
 			}
 			free(bind_params);
 		}
-		
+
 		free(sql);
 
 		if (values != NULL)
