@@ -28,7 +28,7 @@ int main(int argc, char const *argv[])
 
 	int n = 0;
 
-	debug = 2; //getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
+	debug = getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
 
 	if (debug > 1) dprintf(2, "%s: loaded. PID=%d\n", argv[0], getpid());
 

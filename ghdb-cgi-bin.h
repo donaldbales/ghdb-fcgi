@@ -306,10 +306,12 @@ char * html_encode(char *string)
 	char *result = NULL;
 	int result_length = string_length;
 	int i = 0;
+	if (debug > 1) dprintf(2, "html_encode: string=\"%s\"\n", string);
+	if (debug > 1) dprintf(2, "html_encode: string_length=%d\n", string_length);
 	for (i=0; i<string_length; i++)
 	{
 		c = *(string + i);
-		//if (debug > 1) dprintf(2, "%c\n", c);
+		if (debug > 1) dprintf(2, "html_encode: %c\n", c);
 		switch (c)
 		{
 			case '<':
@@ -329,17 +331,18 @@ char * html_encode(char *string)
 				break;
 		}
 	}
+	if (debug > 1) dprintf(2, "html_encode: result_length=%d\n", result_length);
 	result = malloc(result_length + 1);
 	if (result == NULL)
 	{
-		dprintf(2, "Failed to allocate %d bytes of memory for result.\n", result_length + 1);
+		dprintf(2, "html_encode: Failed to allocate %d bytes of memory for result.\n", result_length + 1);
 		exit(EXIT_FAILURE);
 	}
 	p = result;
 	for (i=0; i<string_length; i++)
 	{
 		c = *(string + i);
-		//if (debug > 1) dprintf(2, "%c\n", c);
+		if (debug > 1) dprintf(2, "html_encode: %c\n", c);
 		switch (c)
 		{
 			case '<':
@@ -368,6 +371,8 @@ char * html_encode(char *string)
 				break;
 		}
 	}
+	*p = '\0';
+	if (debug > 1) dprintf(2, "html_encode: result=\"%s\"\n", result);
 
 	return result;
 }
@@ -635,13 +640,13 @@ struct KEY_VALUE * get_post_data(int *key_values_length)
 	struct KEY_VALUE *key_values = NULL;
 
 	content_length_string = getenv("CONTENT_LENGTH");
-	//dprintf(2, "get_post_data(): content_length_string=\"%s\"\n", content_length_string);
+	if (debug) dprintf(2, "get_post_data(): content_length_string=\"%s\"\n", content_length_string);
 	if (content_length_string != NULL)
 	{
 		content_length = atoi(content_length_string);
-		//dprintf(2, "get_post_data(): content_length=%d\n", content_length);
+		if (debug) dprintf(2, "get_post_data(): content_length=%d\n", content_length);
 		if (content_length > 0)
-		{	
+		{
 			buffer = malloc(content_length + 1);
 			if (buffer == NULL)
 			{
@@ -649,6 +654,7 @@ struct KEY_VALUE * get_post_data(int *key_values_length)
 				exit(EXIT_FAILURE);
 			}
 
+			if (debug) dprintf(2, "get_post_data(): stdin=%p\n", stdin);
 			if (content_length > 0)
 			{
 				fgets(buffer, content_length + 1, stdin);
@@ -663,6 +669,7 @@ struct KEY_VALUE * get_post_data(int *key_values_length)
 				//dprintf(2, "get_post_data(): key_values_found=%d\n", key_values_found);
 				if (key_values_found > 0)
 				{
+					free(key_values);
 					key_values = (struct KEY_VALUE *)malloc((sizeof(struct KEY_VALUE) * key_values_found));
 					if (key_values == NULL)
 					{
@@ -704,8 +711,10 @@ struct KEY_VALUE * get_post_data(int *key_values_length)
 			free(buffer);
 		}
 	}
-	
+	if (debug) dprintf(2, "get_post_data(): key_values_found=%d\n", key_values_found);
 	*(key_values_length) = key_values_found;
+
+	if (debug) dprintf(2, "get_post_data(): key_values=%p\n", key_values);
 
 	return key_values;
 }

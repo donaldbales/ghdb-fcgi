@@ -44,13 +44,9 @@ int main(int argc, char const *argv[])
 
 	uint64_t affected_rows = 0;
 
-	//char *bind_buffer = NULL;
-	//long unsigned *bind_length = NULL;
-	//bool *bind_is_null = NULL;
-
 	int n = 0;
 
-	debug = 2; //getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
+	debug = getenv("GHDB_DEBUG") == NULL ? 0 : atoi(getenv("GHDB_DEBUG"));
 
 	if (debug > 1) dprintf(2, "%s: loaded.\n", argv[0]);
 
@@ -280,6 +276,7 @@ int main(int argc, char const *argv[])
 				free((bind_params + i)->is_null);
 			}
 			free(bind_params);
+			bind_params = NULL;
 		}
 
 		if (values != NULL)
@@ -289,6 +286,7 @@ int main(int argc, char const *argv[])
 				free(*(values + i));
 			}
 			free(values);
+			values = NULL;
 		}
 
 		n = FCGI_Accept();
