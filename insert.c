@@ -131,13 +131,16 @@ int main(int argc, char const *argv[])
 				} 
 			}
 		}
+		if (key_values != NULL)
+		{
 		for (i = 0; i < values_length; i++)
 		{
 			free((key_values + i)->key);
 			free((key_values + i)->value);
 		}
 		free(key_values);
-
+		}
+		
 		if (debug > 0) fprintf(stderr, "Build the bind variable.\n");
 		if (debug > 0) fprintf(stderr, "Set the bind array to zeroes.\n");
 		for (i = 0; i < NUM_FIELDS; i++)

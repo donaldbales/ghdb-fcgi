@@ -14,7 +14,7 @@
 /*
 gcc delete.c -o delete.fcgi -I /usr/include -l:libfcgi.so -I /usr/include/mysql -l mysqlclient && chmod 755 delete.fcgi
 
-cat Apple.txt | env CONTENT_LENGTH=`stat -c %s Apple.txt` ./delete.fcgi
+cat Apple.delete | env CONTENT_LENGTH=`stat -c %s Apple.delete` ./delete.fcgi
 
 2026-11-18: sudo pmap -x 276796 | grep -e Address -e total, verified no memory leakage.
 */
