@@ -131,15 +131,6 @@ int main(int argc, char const *argv[])
 				} 
 			}
 		}
-		if (key_values != NULL)
-		{
-		for (i = 0; i < values_length; i++)
-		{
-			free((key_values + i)->key);
-			free((key_values + i)->value);
-		}
-		free(key_values);
-		}
 		
 		if (debug > 0) fprintf(stderr, "Build the bind variable.\n");
 		if (debug > 0) fprintf(stderr, "Set the bind array to zeroes.\n");
@@ -213,12 +204,22 @@ int main(int argc, char const *argv[])
 
 		if (values != NULL)
 		{
-			for (i = 0; i < NUM_FIELDS; i++)
+			for (i = NUM_FIELDS - 1; i > -1; i--)
 			{
 				free(*(values + i));
 			}
 			free(values);
 			values = NULL;
+		}
+
+		if (key_values != NULL)
+		{
+			for (i = values_length - 1; i > -1; i--)
+			{
+				free((key_values + i)->value);
+				free((key_values + i)->key); // same address as (key_values + i)
+			}
+			key_values = NULL;
 		}
 
 		n = FCGI_Accept();

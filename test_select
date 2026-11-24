@@ -1,0 +1,14 @@
+#!/bin/bash
+
+host="localhost"
+declare -i i=0
+
+rm select*.body
+rm select*.head
+
+while [ $i -lt 1000 ]
+do
+  curl -d "plant_name=Apple${i}" -o select${i}.body -D select${i}.head http://localhost/fcgi/select.fcgi
+  let "i+=1"
+  #sleep 1
+done

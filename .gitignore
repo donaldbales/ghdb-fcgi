@@ -1,6 +1,7 @@
 # my Binaries
 *.fcgi
-
+*.body
+*.head
 
 # Prerequisites
 *.d

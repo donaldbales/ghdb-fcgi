@@ -1,0 +1,10 @@
+#!/bin/bash
+
+host="localhost"
+declare -i i=0
+
+while [ $i -lt 1000 ]
+do
+  curl -d "plant_name=Apple${i}" http://localhost/fcgi/delete.fcgi
+  let "i+=1"
+done

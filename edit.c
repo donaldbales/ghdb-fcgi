@@ -130,15 +130,6 @@ int main(int argc, char const *argv[])
 				} 
 			}
 		}
-		if (key_values != NULL)
-		{
-			for (i = 0; i < values_length; i++)
-			{
-				free((key_values + i)->key);
-				free((key_values + i)->value);
-			}
-			free(key_values);
-		}
 
 		/*
 			Create a prepared SELECT statement
@@ -514,12 +505,22 @@ int main(int argc, char const *argv[])
 
 		if (values != NULL)
 		{
-			for (i = 0; i < NUM_FIELDS; i++)
+			for (i = NUM_FIELDS - 1; i > -1; i--)
 			{
 				free(*(values + i));
 			}
 			free(values);
 			values = NULL;
+		}
+
+		if (key_values != NULL)
+		{
+			for (i = values_length - 1; i > -1; i--)
+			{
+				free((key_values + i)->value);
+				free((key_values + i)->key); // same address as (key_values + i)
+			}
+			key_values = NULL;
 		}
 
 		n = FCGI_Accept();

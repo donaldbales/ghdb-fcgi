@@ -132,15 +132,6 @@ int main(int argc, char const *argv[])
 				} 
 			}
 		}
-		if (key_values != NULL)
-		{
-			for (i = 0; i < values_length; i++)
-			{
-				free((key_values + i)->key);
-				free((key_values + i)->value);
-			}
-			free(key_values);
-		}
 
 		if (debug > 0) fprintf(stderr, "Build the bind_param variable.\n");
 		bind_params = (struct MYSQL_BIND *)malloc(sizeof(struct MYSQL_BIND) * NUM_FIELDS);
@@ -287,6 +278,16 @@ int main(int argc, char const *argv[])
 			}
 			free(values);
 			values = NULL;
+		}
+
+		for (i = values_length - 1; i > -1; i--)
+		{
+			if ((key_values + i) != NULL)
+			{
+				free((key_values + i)->value);
+				free((key_values + i)->key); // same address as (key_values + i)
+			}
+			key_values = NULL;
 		}
 
 		n = FCGI_Accept();
