@@ -481,22 +481,25 @@ int main(int argc, char const *argv[])
 				free(*(bind_result_buffers + i));
 			}
 			free(bind_result_errors);
+			bind_result_errors = NULL;
 			free(bind_result_is_nulls);
+			bind_result_is_nulls = NULL;
 			free(bind_result_buffers);
+			bind_result_buffers = NULL;
 			free(bind_result_lengths);
+			bind_result_lengths = NULL;
 			free(bind_results);
 			bind_results = NULL;
 		}
 
 		if (bind_params != NULL)
 		{
-			for (i = 0; i < bind_params_length; i++)
+			for (i = bind_params_length - 1; i  > -1; i--)
 			{
 				free((bind_params + i)->buffer);
-				free((bind_params + i)->length);
 				free((bind_params + i)->is_null);
+				free((bind_params + i)->length); // same address as (bind_params + i)
 			}
-			free(bind_params);
 			bind_params = NULL;
 		}
 
@@ -518,8 +521,9 @@ int main(int argc, char const *argv[])
 			for (i = values_length - 1; i > -1; i--)
 			{
 				free((key_values + i)->value);
-				free((key_values + i)->key); // same address as (key_values + i)
+				free((key_values + i)->key);
 			}
+			free(key_values);
 			key_values = NULL;
 		}
 

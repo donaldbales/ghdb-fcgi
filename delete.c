@@ -218,13 +218,12 @@ int main(int argc, char const *argv[])
 		*/
 		if (bind_params != NULL)
 		{
-			for (i = 0; i < bind_params_length; i++)
+			for (i = bind_params_length - 1; i  > -1; i--)
 			{
 				free((bind_params + i)->buffer);
-				free((bind_params + i)->length);
 				free((bind_params + i)->is_null);
+				free((bind_params + i)->length); // same address as (bind_params + i)
 			}
-			free(bind_params);
 			bind_params = NULL;
 		}
 
@@ -243,8 +242,9 @@ int main(int argc, char const *argv[])
 			for (i = values_length - 1; i > -1; i--)
 			{
 				free((key_values + i)->value);
-				free((key_values + i)->key); // same address as (key_values + i)
+				free((key_values + i)->key);
 			}
+			free(key_values);
 			key_values = NULL;
 		}
 

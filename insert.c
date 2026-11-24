@@ -195,11 +195,14 @@ int main(int argc, char const *argv[])
 		/*
 			Clean up dynamically allocated memory
 		*/
-		for (i = 0; i < NUM_FIELDS; i++)
+		if (bind_params != NULL)
 		{
-			free(bind_params[i].buffer);
-			free(bind_params[i].length);
-			free(bind_params[i].is_null);
+			for (i = NUM_FIELDS - 1; i  > -1; i--)
+			{
+				free((bind_params + i)->buffer);
+				free((bind_params + i)->is_null);
+				free((bind_params + i)->length); // same address as (bind_params + i)
+			}
 		}
 
 		if (values != NULL)
@@ -217,8 +220,9 @@ int main(int argc, char const *argv[])
 			for (i = values_length - 1; i > -1; i--)
 			{
 				free((key_values + i)->value);
-				free((key_values + i)->key); // same address as (key_values + i)
+				free((key_values + i)->key);
 			}
+			free(key_values);
 			key_values = NULL;
 		}
 

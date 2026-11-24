@@ -260,33 +260,33 @@ int main(int argc, char const *argv[])
 		*/
 		if (bind_params != NULL)
 		{
-			for (i = 0; i < bind_params_length; i++)
+			for (i = bind_params_length - 1; i  > -1; i--)
 			{
 				free((bind_params + i)->buffer);
-				free((bind_params + i)->length);
 				free((bind_params + i)->is_null);
+				free((bind_params + i)->length); // same address as (bind_params + i)
 			}
-			free(bind_params);
 			bind_params = NULL;
 		}
 
 		if (values != NULL)
 		{
-			for (i = 0; i < NUM_FIELDS; i++)
+			for (i = NUM_FIELDS - 1; i > -1; i--)
 			{
-				free(*(values + i));
+				free(*(values + i)); // same address as (values + i)?
 			}
 			free(values);
 			values = NULL;
 		}
 
-		for (i = values_length - 1; i > -1; i--)
+		if (key_values != NULL)
 		{
-			if ((key_values + i) != NULL)
+			for (i = values_length - 1; i > -1; i--)
 			{
 				free((key_values + i)->value);
 				free((key_values + i)->key); // same address as (key_values + i)
 			}
+			free(key_values);
 			key_values = NULL;
 		}
 
